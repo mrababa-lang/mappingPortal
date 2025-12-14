@@ -8,9 +8,27 @@ export interface LoginResponse {
 
 export const AuthService = {
   login: async (email: string, password: string): Promise<User> => {
-    const response = await api.post<LoginResponse>('/auth/login', { email, password });
-    const { token, user } = response.data;
+    const response = await api.post<any>('/auth/login', { email, password });
     
+    // Explicitly handle the provided response structure: { data: { token, user: {...} }, meta: ... }
+    const responseData = response.data;
+    
+    // Try to find user in responseData.data.user (Standard wrapper) or responseData.user (Direct)
+    let user = responseData.data?.user || responseData.user;
+    
+    // Try to find token
+    const token = responseData.data?.token || responseData.token;
+
+    if (!user) {
+      console.error("Login failed: Invalid response structure", responseData);
+      throw new Error("User data missing from server response.");
+    }
+
+    // Safety check for fullName, fallback to 'name' if present (API compatibility)
+    if (!user.fullName && (user as any).name) {
+       user.fullName = (user as any).name;
+    }
+
     if (token) {
       localStorage.setItem('auth_token', token);
       localStorage.setItem('auth_user', JSON.stringify(user));

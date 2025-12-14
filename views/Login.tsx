@@ -20,11 +20,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
 
     try {
       const user = await AuthService.login(email, password);
+      
+      if (!user) {
+        throw new Error("Received empty user data");
+      }
+
       onLogin(user);
-      toast.success(`Welcome back, ${user.fullName}`);
-    } catch (error) {
+      // Safe access using optional chaining
+      toast.success(`Welcome back, ${user?.fullName || 'User'}`);
+    } catch (error: any) {
       console.error("Login Error", error);
-      toast.error("Invalid credentials or server error.");
+      toast.error(error.message || "Invalid credentials or server error.");
     } finally {
       setIsLoading(false);
     }
