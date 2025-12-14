@@ -1,0 +1,126 @@
+# SlashData Vehicle Portal - Enhancement & Fixes Log
+
+This document outlines the roadmap to transition the application from a "Mock/Prototype" state to a robust "Production" system backed by Java Spring Boot and MySQL.
+
+**How to use:** Copy the "Prompt for AI" block for each section and provide it to your AI coding assistant to implement the specific change.
+
+================================================================================
+SECTION 1: CRITICAL FIXES (Production Migration)
+================================================================================
+
+## 1. Architecture & Routing
+- **Task**: Replace state-based navigation with React Router.
+- **Current**: `App.tsx` uses a simple state (`currentView`) for navigation.
+- **Goal**: Enable deep linking, browser history support, and protected routes.
+- **Prompt for AI**:
+  > Refactor the application to use `react-router-dom` v6+ for navigation instead of the current state-based `currentView` variable.
+  > 1. Install `react-router-dom`.
+  > 2. In `App.tsx`, set up a `<BrowserRouter>` with `<Routes>`. Define routes for `/dashboard`, `/makes`, `/models`, `/types`, `/adp/master`, `/adp/mapping`, `/adp/review`, `/users`, and `/login`.
+  > 3. Create a `ProtectedRoute` component that checks for the user object/token and redirects to `/login` if missing. Wrap authenticated routes with it.
+  > 4. Update `components/Layout.tsx` to use `<Link>` or `useNavigate` for sidebar items instead of the `onNavigate` prop.
+  > 5. Ensure the active state in the sidebar highlights based on the current URL path.
+
+## 2. API Integration (Backend Connection)
+- **Task**: Create a centralized Axios API service.
+- **Current**: `storageService.ts` mocks data using `localStorage`.
+- **Goal**: Connect to the Spring Boot backend defined in `backend_specification.txt`.
+- **Prompt for AI**:
+  > Create a new file `services/api.ts` to replace `services/storageService.ts`.
+  > 1. Initialize an `axios` instance with a base URL (e.g., `import.meta.env.VITE_API_URL` or default to `http://localhost:8080/api`).
+  > 2. Add a **Request Interceptor** to check `localStorage` for a JWT token and attach it to the `Authorization: Bearer <token>` header.
+  > 3. Add a **Response Interceptor** to handle 401/403 errors globally (e.g., redirect to login on 401).
+  > 4. Create typed service functions that mirror the backend endpoints (e.g., `fetchMakes`, `createMake`, `deleteMake`) and return typed Promises using the interfaces in `types.ts`.
+  > 5. (Optional) Refactor one view (e.g., `Makes.tsx`) to demonstrate using this new API service instead of `DataService`.
+
+## 3. Security & Secrets
+- **Task**: Move AI calls to the Server-Side.
+- **Current**: `geminiService.ts` exposes the API Key in the browser.
+- **Goal**: Proxy AI requests through the Java backend.
+- **Prompt for AI**:
+  > Refactor `services/geminiService.ts`. Remove the client-side Google GenAI SDK usage.
+  > Instead, implement two functions: `generateDescription(name, context)` and `suggestModels(makeName)` that make POST requests to the backend endpoints `/api/ai/generate` and `/api/ai/suggest` respectively.
+  > Update the UI components (`Types.tsx` and `Models.tsx`) to handle any potential network errors from these calls gracefully.
+
+## 4. Authentication
+- **Task**: Implement real JWT Authentication.
+- **Current**: Mock login against hardcoded array.
+- **Goal**: Authenticate against the backend `Users` table.
+- **Prompt for AI**:
+  > Update `views/Login.tsx` to implement a real login flow.
+  > 1. Remove the mock user check.
+  > 2. Call the backend endpoint `POST /api/auth/login` with email and password.
+  > 3. On success, store the returned JWT token in `localStorage` (key: `token`) and the user details in a User Context or global state.
+  > 4. Redirect to `/dashboard`.
+  > 5. Update `App.tsx` to check for the token on initial load and re-hydrate the user session if valid, otherwise redirect to login.
+
+## 5. Data Handling (CSV & Concurrency)
+- **Task**: Server-side CSV parsing and Optimistic UI handling.
+- **Current**: Client-side parsing and local state assumption.
+- **Goal**: Scalable import and accurate status reporting.
+- **Prompt for AI**:
+  > Update the "Bulk Import" logic in `Makes.tsx`, `Models.tsx`, and `ADPMaster.tsx`.
+  > 1. Instead of reading the file content with `FileReader` in the browser, use `FormData` to append the selected file.
+  > 2. POST this `FormData` to the respective backend bulk endpoints (e.g., `POST /api/makes/bulk`).
+  > 3. Handle the response, which might contain a report of successful vs. failed rows, and display this summary to the user (e.g., "50 imported, 3 duplicates skipped").
+  > 4. In `MappingReview.tsx`, update the Approve/Reject logic to handle `409 Conflict` errors (e.g., "This item was already reviewed by another user") by showing a toast and refreshing the list.
+
+================================================================================
+SECTION 2: RECOMMENDED ENHANCEMENTS (UX & Scalability)
+================================================================================
+
+## 1. State Management & Caching
+- **Task**: Integrate TanStack Query.
+- **Goal**: Automatic caching, loading states, and background refetching.
+- **Prompt for AI**:
+  > Install `@tanstack/react-query`.
+  > 1. Wrap the application in `QueryClientProvider` in `index.tsx`.
+  > 2. Create custom hooks for major data types, e.g., `useMakes`, `useAdpData`, `useMappingStats`.
+  > 3. Refactor `Dashboard.tsx` to use these hooks. Replace manual `useEffect` fetching and `useState` loading flags with the `isLoading` and `data` properties from React Query.
+  > 4. Implement mutations for Create/Update/Delete operations and use `queryClient.invalidateQueries` to automatically refresh the table data after a successful action.
+
+## 2. UI Performance
+- **Task**: Table Virtualization.
+- **Goal**: Handle 50,000+ ADP records without freezing the browser.
+- **Prompt for AI**:
+  > Install `@tanstack/react-virtual`.
+  > Refactor the table in `views/ADPMaster.tsx` to use row virtualization.
+  > 1. The table container should have a fixed height (e.g., `h-[600px]`).
+  > 2. Use the `useVirtualizer` hook to render only the visible rows based on the scroll position.
+  > 3. Ensure the table header remains fixed at the top while the body scrolls.
+  > 4. Verify that sorting and filtering still work correctly with the virtualized list.
+
+## 3. User Feedback System
+- **Task**: Toast Notifications.
+- **Goal**: Professional feedback loop.
+- **Prompt for AI**:
+  > Install `sonner` (or `react-hot-toast`).
+  > 1. Add the `<Toaster />` component to `App.tsx` (or `Layout.tsx`).
+  > 2. Replace all `alert()` calls and inline error divs with toast notifications.
+  >    - Success: `toast.success("Make created successfully")`
+  >    - Error: `toast.error("Failed to load data: Network Error")`
+  > 3. Create a custom wrapper function/hook `useNotify` if needed to standardize toast styling across the app.
+
+## 4. Form Handling
+- **Task**: Zod Validation & React Hook Form.
+- **Goal**: Robust data validation matching backend constraints.
+- **Prompt for AI**:
+  > Install `react-hook-form` and `zod` and `@hookform/resolvers`.
+  > Refactor the "Add/Edit Model" modal in `views/Models.tsx`:
+  > 1. Define a Zod schema matching the `Model` interface, ensuring `makeId` and `typeId` are non-empty strings and `name` is at least 2 characters.
+  > 2. Replace the manual `useState` form handling with `useForm`.
+  > 3. Connect the input fields (`Input`, `Select`) to the form register/control.
+  > 4. Display validation errors inline below the inputs using the `errors` object from `useForm`.
+
+## 5. Advanced Features
+- **Task**: Smart Mapping & Audit Logs.
+- **Goal**: AI assistance and accountability.
+- **Prompt for AI**:
+  > 1. **Smart Suggestions**: In `ADPMapping.tsx` modal, when a user opens a mapping for an ADP item (e.g., "TOY CAM"), trigger a background call to `/api/ai/suggest-mapping` sending the ADP description. Display the suggested SlashData Make/Model with a "Confidence Score" (e.g., "95% Match: Toyota Camry") and a button to "Apply Suggestion".
+  > 2. **Audit History**: Add a new tab or a "History" button in the `ADPMapping.tsx` table row. When clicked, open a modal fetching `/api/adp/mappings/{id}/history` and display a timeline of changes (e.g., "Created by John", "Rejected by Admin", "Re-mapped by Jane").
+
+## 6. DevOps & Quality
+- **Task**: Error Boundaries & Tests.
+- **Goal**: Production reliability.
+- **Prompt for AI**:
+  > 1. **Error Boundary**: Create an `ErrorBoundary.tsx` component. Wrap the `App` component in `index.tsx`. If the app crashes (e.g., rendering error), display a friendly "Something went wrong" UI with a "Reload Page" button.
+  > 2. **Testing**: Install `vitest` and `@testing-library/react`. Write a unit test for the `dashboard` calculation logic (ensuring mapped/unmapped counts are correct) and a component test for `Login.tsx` ensuring the submit button is disabled while loading.
