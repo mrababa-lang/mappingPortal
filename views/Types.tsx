@@ -3,7 +3,7 @@ import { DataService } from '../services/storageService';
 import { generateDescription } from '../services/geminiService';
 import { VehicleType } from '../types';
 import { Card, Button, Input, TextArea, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle } from 'lucide-react';
 
 export const TypesView: React.FC = () => {
   const [types, setTypes] = useState<VehicleType[]>([]);
@@ -17,6 +17,10 @@ export const TypesView: React.FC = () => {
   // AI State
   const [isGenerating, setIsGenerating] = useState(false);
   
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+
   // Form State
   const [formData, setFormData] = useState<Partial<VehicleType>>({ name: '', nameAr: '', description: '', descriptionAr: '' });
   
@@ -50,9 +54,9 @@ export const TypesView: React.FC = () => {
   const handleSave = () => {
     if (!formData.name) return;
 
+    let updatedTypes;
     if (editingId) {
-      const updated = types.map(t => t.id === editingId ? { ...t, ...formData } as VehicleType : t);
-      DataService.saveTypes(updated);
+      updatedTypes = types.map(t => t.id === editingId ? { ...t, ...formData } as VehicleType : t);
     } else {
       const newType: VehicleType = {
         id: Date.now().toString(),
@@ -61,10 +65,12 @@ export const TypesView: React.FC = () => {
         description: formData.description || '',
         descriptionAr: formData.descriptionAr || ''
       };
-      DataService.saveTypes([...types, newType]);
+      updatedTypes = [...types, newType];
     }
+    
+    DataService.saveTypes(updatedTypes);
+    setTypes(updatedTypes);
     setIsModalOpen(false);
-    refreshData();
   };
   
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -103,8 +109,9 @@ export const TypesView: React.FC = () => {
     });
 
     if (newTypes.length > 0) {
-      DataService.saveTypes([...types, ...newTypes]);
-      refreshData();
+      const updatedTypes = [...types, ...newTypes];
+      DataService.saveTypes(updatedTypes);
+      setTypes(updatedTypes);
       setIsBulkOpen(false);
       setBulkData('');
     } else {
@@ -112,13 +119,22 @@ export const TypesView: React.FC = () => {
     }
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm("Delete this vehicle type?")) {
-      const filtered = types.filter(t => t.id !== id);
-      DataService.saveTypes(filtered);
-      refreshData();
-    }
+  const initiateDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop row click
+    setItemToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    const id = itemToDelete;
+
+    const filtered = types.filter(t => t.id !== id);
+    DataService.saveTypes(filtered);
+    setTypes(filtered);
+
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   const handleAIGenerate = async () => {
@@ -201,11 +217,11 @@ export const TypesView: React.FC = () => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" className="p-2 h-auto" onClick={(e) => { e.stopPropagation(); handleOpenModal(type); }}>
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" className="p-2 h-auto" onClick={(e) => handleOpenModal(type)}>
                         <Edit2 size={16} />
                       </Button>
-                      <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDelete(type.id, e)}>
+                      <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => initiateDelete(type.id, e)}>
                         <Trash2 size={16} />
                       </Button>
                     </div>
@@ -285,6 +301,30 @@ export const TypesView: React.FC = () => {
               placeholder="وصف نوع المركبة..."
               dir="rtl"
             />
+        </div>
+      </Modal>
+      
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Deletion"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete Type</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col items-center justify-center p-4 text-center">
+           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600">
+             <AlertTriangle size={24} />
+           </div>
+           <h3 className="text-lg font-bold text-slate-900 mb-2">Delete Vehicle Type?</h3>
+           <p className="text-slate-500 text-sm">
+             Are you sure you want to delete this Vehicle Type? <br/>
+             This action cannot be undone.
+           </p>
         </div>
       </Modal>
 

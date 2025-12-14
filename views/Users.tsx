@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/storageService';
 import { User } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Select, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, UserCircle, Shield, CheckCircle2, XCircle, Lock } from 'lucide-react';
+import { Plus, Trash2, Edit2, UserCircle, Shield, CheckCircle2, XCircle, Lock, AlertTriangle } from 'lucide-react';
 
 export const UsersView: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -10,6 +10,10 @@ export const UsersView: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
+
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   
   // Form State
   const [formData, setFormData] = useState<Partial<User>>({ 
@@ -77,16 +81,23 @@ export const UsersView: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (window.confirm("Are you sure you want to remove this user?")) {
-      const currentUsers = DataService.getUsers();
-      const filtered = currentUsers.filter(u => u.id !== id);
-      DataService.saveUsers(filtered);
-      setUsers(filtered);
-    }
+  const initiateDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop row click
+    setItemToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    const id = itemToDelete;
+
+    const currentUsers = DataService.getUsers();
+    const filtered = currentUsers.filter(u => u.id !== id);
+    DataService.saveUsers(filtered);
+    setUsers(filtered);
+
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   // Pagination Logic
@@ -155,7 +166,7 @@ export const UsersView: React.FC = () => {
                       <Button variant="ghost" className="p-2 h-auto" onClick={(e) => handleOpenModal(user)}>
                         <Edit2 size={16} />
                       </Button>
-                      <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDelete(user.id, e)}>
+                      <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => initiateDelete(user.id, e)}>
                         <Trash2 size={16} />
                       </Button>
                     </div>
@@ -235,6 +246,30 @@ export const UsersView: React.FC = () => {
               ]}
             />
           </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Deletion"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete User</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col items-center justify-center p-4 text-center">
+           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600">
+             <AlertTriangle size={24} />
+           </div>
+           <h3 className="text-lg font-bold text-slate-900 mb-2">Delete User?</h3>
+           <p className="text-slate-500 text-sm">
+             Are you sure you want to remove this user from the system? <br/>
+             This action cannot be undone.
+           </p>
         </div>
       </Modal>
     </div>

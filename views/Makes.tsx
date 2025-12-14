@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/storageService';
 import { Make, Model, VehicleType } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertCircle, AlertTriangle } from 'lucide-react';
 
 export const MakesView: React.FC = () => {
   const [makes, setMakes] = useState<Make[]>([]);
@@ -11,6 +11,11 @@ export const MakesView: React.FC = () => {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
+  
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -86,32 +91,41 @@ export const MakesView: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm("Are you sure? This will permanently delete the Make and ALL associated Models.")) {
-      // 1. Delete associated Models
-      const allModels = DataService.getModels();
-      const modelsToDelete = allModels.filter(m => m.makeId === id);
-      const modelIdsToDelete = new Set(modelsToDelete.map(m => m.id));
-      const remainingModels = allModels.filter(m => m.makeId !== id);
-      DataService.saveModels(remainingModels);
-      setModels(remainingModels);
+  const initiateDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop row click
+    setItemToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
 
-      // 2. Clean up Mappings (Remove mappings referencing deleted models or this make)
-      const allMappings = DataService.getADPMappings();
-      const updatedMappings = allMappings.filter(m => {
-          // Keep mapping only if it DOES NOT link to a deleted model AND DOES NOT link to this make
-          const linksToDeletedModel = m.modelId && modelIdsToDelete.has(m.modelId);
-          const linksToDeletedMake = m.makeId === id;
-          return !linksToDeletedModel && !linksToDeletedMake;
-      });
-      DataService.saveADPMappings(updatedMappings);
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    const id = itemToDelete;
 
-      // 3. Delete Make
-      const remainingMakes = makes.filter(m => m.id !== id);
-      DataService.saveMakes(remainingMakes);
-      setMakes(remainingMakes);
-    }
+    // 1. Delete associated Models
+    const allModels = DataService.getModels();
+    const modelsToDelete = allModels.filter(m => m.makeId === id);
+    const modelIdsToDelete = new Set(modelsToDelete.map(m => m.id));
+    const remainingModels = allModels.filter(m => m.makeId !== id);
+    DataService.saveModels(remainingModels);
+    setModels(remainingModels);
+
+    // 2. Clean up Mappings (Remove mappings referencing deleted models or this make)
+    const allMappings = DataService.getADPMappings();
+    const updatedMappings = allMappings.filter(m => {
+        // Keep mapping only if it DOES NOT link to a deleted model AND DOES NOT link to this make
+        const linksToDeletedModel = m.modelId && modelIdsToDelete.has(m.modelId);
+        const linksToDeletedMake = m.makeId === id;
+        return !linksToDeletedModel && !linksToDeletedMake;
+    });
+    DataService.saveADPMappings(updatedMappings);
+
+    // 3. Delete Make
+    const remainingMakes = makes.filter(m => m.id !== id);
+    DataService.saveMakes(remainingMakes);
+    setMakes(remainingMakes);
+    
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -256,11 +270,11 @@ export const MakesView: React.FC = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
-                        <Button variant="ghost" className="p-2 h-auto" onClick={(e) => { e.stopPropagation(); handleOpenModal(make); }}>
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" className="p-2 h-auto" onClick={(e) => handleOpenModal(make)}>
                           <Edit2 size={16} />
                         </Button>
-                        <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDelete(make.id, e)}>
+                        <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => initiateDelete(make.id, e)}>
                           <Trash2 size={16} />
                         </Button>
                       </div>
@@ -323,6 +337,30 @@ export const MakesView: React.FC = () => {
                 dir="rtl"
               />
           </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Deletion"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete Permanently</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col items-center justify-center p-4 text-center">
+           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600">
+             <AlertTriangle size={24} />
+           </div>
+           <h3 className="text-lg font-bold text-slate-900 mb-2">Delete Manufacturer?</h3>
+           <p className="text-slate-500 text-sm">
+             Are you sure you want to delete this Make? <br/>
+             <strong className="text-red-600">Warning:</strong> This will also permanently delete <strong>all associated models</strong> and remove their mappings. This action cannot be undone.
+           </p>
         </div>
       </Modal>
 

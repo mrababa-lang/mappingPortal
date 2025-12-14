@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DataService } from '../services/storageService';
 import { ADPMaster } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle } from 'lucide-react';
 
 export const ADPMasterView: React.FC = () => {
   const [adpList, setAdpList] = useState<ADPMaster[]>([]);
@@ -13,6 +13,10 @@ export const ADPMasterView: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const ITEMS_PER_PAGE = 20;
+
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   
   // Form State
   const [formData, setFormData] = useState<Partial<ADPMaster>>({ 
@@ -123,26 +127,31 @@ export const ADPMasterView: React.FC = () => {
     }
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const initiateDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop row click
+    setItemToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    const id = itemToDelete;
+
+    // Fetch fresh data
+    const currentMaster = DataService.getADPMaster();
+    const currentMappings = DataService.getADPMappings();
+
+    // 1. Delete Mappings related to this ADP Item
+    const updatedMappings = currentMappings.filter(m => m.adpId !== id);
+    DataService.saveADPMappings(updatedMappings);
+
+    // 2. Delete ADP Item
+    const filtered = currentMaster.filter(item => item.id !== id);
+    DataService.saveADPMaster(filtered);
     
-    if (window.confirm("Delete this ADP entry? This will remove existing mappings for this vehicle.")) {
-      // Fetch fresh data to ensure we don't have stale state
-      const currentMaster = DataService.getADPMaster();
-      const currentMappings = DataService.getADPMappings();
-
-      // 1. Delete Mappings related to this ADP Item
-      const updatedMappings = currentMappings.filter(m => m.adpId !== id);
-      DataService.saveADPMappings(updatedMappings);
-
-      // 2. Delete ADP Item
-      const filtered = currentMaster.filter(item => item.id !== id);
-      DataService.saveADPMaster(filtered);
-      
-      // 3. Update UI
-      setAdpList(filtered);
-    }
+    setAdpList(filtered);
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   // Filter Logic
@@ -228,7 +237,7 @@ export const ADPMasterView: React.FC = () => {
                       <Button variant="ghost" className="p-2 h-auto" onClick={(e) => handleOpenModal(item)}>
                         <Edit2 size={16} />
                       </Button>
-                      <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDelete(item.id, e)}>
+                      <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => initiateDelete(item.id, e)}>
                         <Trash2 size={16} />
                       </Button>
                     </div>
@@ -294,6 +303,30 @@ export const ADPMasterView: React.FC = () => {
               <Input label="Desc (Ar)" value={formData.typeArDesc} onChange={e => setFormData({...formData, typeArDesc: e.target.value})} placeholder="سيدان" dir="rtl" />
             </div>
           </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Deletion"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete Entry</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col items-center justify-center p-4 text-center">
+           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600">
+             <AlertTriangle size={24} />
+           </div>
+           <h3 className="text-lg font-bold text-slate-900 mb-2">Delete ADP Entry?</h3>
+           <p className="text-slate-500 text-sm">
+             Are you sure you want to delete this record? <br/>
+             This will remove any existing mappings associated with this vehicle.
+           </p>
         </div>
       </Modal>
 

@@ -3,7 +3,7 @@ import { DataService } from '../services/storageService';
 import { suggestModels } from '../services/geminiService';
 import { Model, Make, VehicleType } from '../types';
 import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Sparkles, Upload, FileText, Search, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, Upload, FileText, Search, AlertCircle, AlertTriangle } from 'lucide-react';
 
 export const ModelsView: React.FC = () => {
   const [models, setModels] = useState<Model[]>([]);
@@ -19,6 +19,10 @@ export const ModelsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [error, setError] = useState<string | null>(null);
   const ITEMS_PER_PAGE = 20;
+
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   // Form State
   const [formData, setFormData] = useState<Partial<Model>>({ 
@@ -94,19 +98,28 @@ export const ModelsView: React.FC = () => {
     setIsModalOpen(false);
   };
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm("Delete this model permanently?")) {
-      // 1. Clean up Mappings
-      const allMappings = DataService.getADPMappings();
-      const updatedMappings = allMappings.filter(m => m.modelId !== id);
-      DataService.saveADPMappings(updatedMappings);
+  const initiateDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop row click
+    setItemToDelete(id);
+    setIsDeleteModalOpen(true);
+  };
 
-      // 2. Delete Model
-      const remainingModels = models.filter(m => m.id !== id);
-      DataService.saveModels(remainingModels);
-      setModels(remainingModels);
-    }
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    const id = itemToDelete;
+
+    // 1. Clean up Mappings
+    const allMappings = DataService.getADPMappings();
+    const updatedMappings = allMappings.filter(m => m.modelId !== id);
+    DataService.saveADPMappings(updatedMappings);
+
+    // 2. Delete Model
+    const remainingModels = models.filter(m => m.id !== id);
+    DataService.saveModels(remainingModels);
+    setModels(remainingModels);
+
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -261,11 +274,11 @@ export const ModelsView: React.FC = () => {
                   </TableCell>
                   <TableCell>{DataService.getTypeName(model.typeId)}</TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
-                      <Button variant="ghost" className="p-2 h-auto" onClick={(e) => { e.stopPropagation(); handleOpenModal(model); }}>
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" className="p-2 h-auto" onClick={(e) => handleOpenModal(model)}>
                         <Edit2 size={16} />
                       </Button>
-                      <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDelete(model.id, e)}>
+                      <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => initiateDelete(model.id, e)}>
                         <Trash2 size={16} />
                       </Button>
                     </div>
@@ -370,6 +383,30 @@ export const ModelsView: React.FC = () => {
                </div>
              )}
           </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Deletion"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete Model</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col items-center justify-center p-4 text-center">
+           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600">
+             <AlertTriangle size={24} />
+           </div>
+           <h3 className="text-lg font-bold text-slate-900 mb-2">Delete Vehicle Model?</h3>
+           <p className="text-slate-500 text-sm">
+             Are you sure you want to delete this Model? <br/>
+             This action cannot be undone.
+           </p>
         </div>
       </Modal>
 

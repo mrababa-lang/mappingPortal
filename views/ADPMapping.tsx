@@ -14,6 +14,10 @@ export const ADPMappingView: React.FC = () => {
   const [editingAdpItem, setEditingAdpItem] = useState<ADPMaster | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
+
+  // Delete Modal State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   
   // Filters
   const [dateFrom, setDateFrom] = useState('');
@@ -139,17 +143,26 @@ export const ADPMappingView: React.FC = () => {
     }
 
     DataService.saveADPMappings(newMappings);
+    setMappings(newMappings); // Immediate Update
     setIsModalOpen(false);
-    refreshData();
   };
 
-  const handleDeleteMapping = (adpId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (window.confirm("Remove this mapping?")) {
-      const filtered = mappings.filter(m => m.adpId !== adpId);
-      DataService.saveADPMappings(filtered);
-      refreshData();
-    }
+  const initiateDelete = (adpId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop row click
+    setItemToDelete(adpId);
+    setIsDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!itemToDelete) return;
+    const adpId = itemToDelete;
+
+    const filtered = mappings.filter(m => m.adpId !== adpId);
+    DataService.saveADPMappings(filtered);
+    setMappings(filtered); 
+
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   // Filter models based on selected make
@@ -452,12 +465,12 @@ export const ADPMappingView: React.FC = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                         <Button variant="ghost" className="p-2 h-auto text-indigo-600 hover:bg-indigo-50" onClick={(e) => { e.stopPropagation(); handleOpenModal(adpItem); }}>
                           <Edit2 size={16} />
                         </Button>
                         {isMapped && (
-                          <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => handleDeleteMapping(adpItem.id, e)}>
+                          <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => initiateDelete(adpItem.id, e)}>
                             <Unlink size={16} />
                           </Button>
                         )}
@@ -595,6 +608,30 @@ export const ADPMappingView: React.FC = () => {
                 )}
              </div>
           </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Confirm Deletion"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button variant="danger" onClick={confirmDelete}>Remove Mapping</Button>
+          </>
+        }
+      >
+        <div className="flex flex-col items-center justify-center p-4 text-center">
+           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600">
+             <AlertTriangle size={24} />
+           </div>
+           <h3 className="text-lg font-bold text-slate-900 mb-2">Unlink Vehicle?</h3>
+           <p className="text-slate-500 text-sm">
+             Are you sure you want to remove this mapping? <br/>
+             This will revert the ADP record to "Unmapped" status.
+           </p>
         </div>
       </Modal>
     </div>
