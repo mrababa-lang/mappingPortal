@@ -75,12 +75,18 @@ export const Layout: React.FC<LayoutProps> = ({ onLogout, user }) => {
   // Filter Navigation based on Roles
   const navGroups = useMemo(() => {
     if (!user) return [];
-    const normalizedRole = (user.role || '').toString().toUpperCase().replace('_', ' ');
+    
+    // Normalize role: handle "ROLE_ADMIN", "Admin", "admin", "Mapping_Admin", "Mapping Admin"
+    let normalizedRole = (user.role || '').toString().toUpperCase();
+    if (normalizedRole.startsWith('ROLE_')) {
+      normalizedRole = normalizedRole.replace('ROLE_', '');
+    }
+    normalizedRole = normalizedRole.replace('_', ' ').trim();
 
     return ALL_NAV_GROUPS.map(group => {
       const filteredItems = group.items.filter(item => {
         // Admin: Access Everything
-        if (normalizedRole === 'ADMIN') return true;
+        if (normalizedRole === 'ADMIN' || normalizedRole === 'SUPER ADMIN') return true;
 
         // Mapping Admin
         if (normalizedRole === 'MAPPING ADMIN') {
@@ -99,6 +105,8 @@ export const Layout: React.FC<LayoutProps> = ({ onLogout, user }) => {
            ];
            return allowedIds.includes(item.id);
         }
+        
+        // Default: No access if role unrecognized, or strictly specific roles
         return false;
       });
       return { ...group, items: filteredItems };
