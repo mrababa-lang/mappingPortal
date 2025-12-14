@@ -8,7 +8,8 @@ export const MappingReviewView: React.FC = () => {
   const [reviews, setReviews] = useState<any[]>([]);
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed'>('pending'); // Default to pending for reviewers
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'reviewed'>('pending'); // Review Status
+  const [typeFilter, setTypeFilter] = useState<'all' | 'MAPPED' | 'MISSING_MAKE' | 'MISSING_MODEL'>('all'); // Mapping Type
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -24,7 +25,7 @@ export const MappingReviewView: React.FC = () => {
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateFrom, dateTo, statusFilter]);
+  }, [dateFrom, dateTo, statusFilter, typeFilter]);
 
   const refreshData = () => {
     const mappings = DataService.getADPMappings();
@@ -78,11 +79,17 @@ export const MappingReviewView: React.FC = () => {
   // Filter Logic
   const filteredReviews = useMemo(() => {
     return reviews.filter(item => {
-      // Status Filter
+      // 1. Review Status Filter
       if (statusFilter === 'pending' && item.reviewedAt) return false;
       if (statusFilter === 'reviewed' && !item.reviewedAt) return false;
 
-      // Date Range Filter (Using Updated At)
+      // 2. Mapping Type Filter
+      if (typeFilter !== 'all') {
+         const itemStatus = item.status || 'MAPPED';
+         if (itemStatus !== typeFilter) return false;
+      }
+
+      // 3. Date Range Filter (Using Updated At)
       if (dateFrom || dateTo) {
         if (!item.updatedAt) return false;
         const itemDate = new Date(item.updatedAt);
@@ -102,7 +109,7 @@ export const MappingReviewView: React.FC = () => {
 
       return true;
     });
-  }, [reviews, statusFilter, dateFrom, dateTo]);
+  }, [reviews, statusFilter, typeFilter, dateFrom, dateTo]);
 
   // Actions
   const handleApprove = (mappingId: string) => {
@@ -190,9 +197,24 @@ export const MappingReviewView: React.FC = () => {
                     value={statusFilter}
                     onChange={e => setStatusFilter(e.target.value as any)}
                     options={[
-                        { value: 'all', label: 'All Status' },
-                        { value: 'pending', label: 'Pending Review' },
+                        { value: 'all', label: 'All Reviews' },
+                        { value: 'pending', label: 'Pending' },
                         { value: 'reviewed', label: 'Reviewed' }
+                    ]}
+                    className="py-1.5 text-xs"
+                    />
+                </div>
+
+                <div className="w-36">
+                    <Select
+                    label=""
+                    value={typeFilter}
+                    onChange={e => setTypeFilter(e.target.value as any)}
+                    options={[
+                        { value: 'all', label: 'All Types' },
+                        { value: 'MAPPED', label: 'Mapped' },
+                        { value: 'MISSING_MODEL', label: 'Missing Model' },
+                        { value: 'MISSING_MAKE', label: 'Missing Make' }
                     ]}
                     className="py-1.5 text-xs"
                     />
@@ -219,9 +241,14 @@ export const MappingReviewView: React.FC = () => {
                     onChange={e => setDateTo(e.target.value)}
                     />
                 </div>
-                {(dateFrom || dateTo || statusFilter !== 'pending') && (
+                {(dateFrom || dateTo || statusFilter !== 'pending' || typeFilter !== 'all') && (
                 <button 
-                    onClick={() => {setDateFrom(''); setDateTo(''); setStatusFilter('pending');}} 
+                    onClick={() => {
+                      setDateFrom(''); 
+                      setDateTo(''); 
+                      setStatusFilter('pending');
+                      setTypeFilter('all');
+                    }} 
                     className="p-2 text-slate-400 hover:text-red-500 transition-colors"
                     title="Reset Filters"
                 >

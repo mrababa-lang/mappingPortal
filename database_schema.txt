@@ -62,6 +62,8 @@ CREATE TABLE ADPMaster (
 
 -- 6. ADP Mappings Table
 -- The core mapping logic. Links ADP Master ID to SlashData Models/Makes.
+-- NOTE: Records in this table represent "Proposed" or "Approved" mappings.
+-- If a mapping is Rejected, the record is DELETED from this table, reverting the ADP item to "Unmapped".
 CREATE TABLE ADPMappings (
     id VARCHAR(50) PRIMARY KEY,
     adp_id VARCHAR(50) NOT NULL UNIQUE, -- 1-to-1 with ADPMaster
@@ -71,10 +73,12 @@ CREATE TABLE ADPMappings (
     model_id VARCHAR(50), -- Populated if MAPPED
     make_id VARCHAR(50),  -- Populated if MISSING_MODEL (partial map)
     
-    -- Audit
+    -- Audit & Review Workflow
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(50),
-    reviewed_at TIMESTAMP,
+    
+    -- Review Columns: NULL means "Pending Review". NOT NULL means "Approved".
+    reviewed_at TIMESTAMP, 
     reviewed_by VARCHAR(50),
 
     -- Constraints
@@ -94,7 +98,13 @@ CREATE TABLE ADPMakeMappings (
     FOREIGN KEY (sd_make_id) REFERENCES Makes(id) ON DELETE CASCADE
 );
 
--- Indexes
+-- Indexes for Performance
+-- Optimize Model lookups
 CREATE INDEX idx_models_make ON Models(make_id);
+
+-- Optimize Mapping Filtering
 CREATE INDEX idx_adp_mapping_status ON ADPMappings(status);
 CREATE INDEX idx_adp_mapping_updated ON ADPMappings(updated_at);
+
+-- Optimize Review Workflow (Finding Pending vs Reviewed)
+CREATE INDEX idx_adp_mapping_review ON ADPMappings(reviewed_at) WHERE reviewed_at IS NULL;

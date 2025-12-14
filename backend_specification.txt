@@ -90,18 +90,15 @@ These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views.
   - When a Make is deleted, the backend **MUST**:
     1. Delete all `Models` associated with this Make.
     2. Update any `ADPMappings` that reference the deleted Make or its Models:
-       - If mapping referenced a deleted model -> Reset to `Unmapped`.
-       - If mapping referenced this make (status `MISSING_MODEL`) -> Reset to `Unmapped`.
-- `POST /bulk`: Bulk import CSV.
-  - **CSV Format**: `Name (En), Name (Ar)`
-  - **Logic**: Ignore duplicates based on Name.
+       - If mapping referenced a deleted model -> Reset to `Unmapped` (Delete mapping record).
+       - If mapping referenced this make (status `MISSING_MODEL`) -> Reset to `Unmapped` (Delete mapping record).
+- `POST /bulk`: Bulk import CSV (See Section 5B).
 
 #### Vehicle Types (`/api/types`)
 - `GET`: Supports `q`.
 - `POST`: Create. **Validation**: Name unique.
 - `PUT /:id`, `DELETE /:id`.
-- `POST /bulk`: Bulk import CSV.
-  - **CSV Format**: `Name, Description` (Description can contain commas).
+- `POST /bulk`: Bulk import CSV (See Section 5B).
 
 #### Models (`/api/models`)
 - `GET`: Supports `q`, `makeId` (Filter by Make).
@@ -109,10 +106,8 @@ These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views.
   - **Validation**: The combination of (`makeId` + `name`) must be unique.
 - `PUT /:id`: Update.
 - `DELETE /:id`: **Cascade Logic**.
-  - When a Model is deleted, update `ADPMappings` referencing this `modelId` to `Unmapped` (or preserve ADP ID but clear model link).
-- `POST /bulk`: Bulk import CSV.
-  - **CSV Format**: `Name, Make Name, Type Name`
-  - **Logic**: Backend must resolve 'Make Name' and 'Type Name' to IDs. Skip row if not found.
+  - When a Model is deleted, update `ADPMappings` referencing this `modelId` to `Unmapped` (Delete mapping record).
+- `POST /bulk`: Bulk import CSV (See Section 5B).
 
 ### 4.4 ADP Integration
 
@@ -122,12 +117,14 @@ These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views.
 - `POST`: Create single entry.
 - `DELETE`: Delete entry (Cascade: delete associated mapping).
 - `POST /bulk`: Bulk import CSV.
-  - **CSV Format**: `MakeID, MakeEn, MakeAr, ModelID, ModelEn, ModelAr, TypeID, TypeEn, TypeAr`
 
 #### Mappings (`/api/adp/mappings`)
 - `GET`: List joined Master + Mapping status.
   - **Query Params**:
-    - `status`: 'all' | 'mapped' | 'unmapped' | 'issues' | 'pending'
+    - `reviewStatus`: 'all' | 'pending' | 'reviewed'
+      - `pending`: `reviewedAt` IS NULL AND id IS NOT NULL.
+      - `reviewed`: `reviewedAt` IS NOT NULL.
+    - `mappingType`: 'all' | 'MAPPED' | 'MISSING_MAKE' | 'MISSING_MODEL'
     - `dateFrom`, `dateTo`: Filter by `updatedAt`.
     - `q`: Search against ADP data OR mapped SD Make/Model names.
 - `PUT /:adpId`: Create or Update mapping.
@@ -139,12 +136,25 @@ These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views.
       "makeId": "uuid" (required if MISSING_MODEL)
     }
     ```
-  - **Logic**: Set `updatedAt` = NOW, `updatedBy` = Current User. **Clear** `reviewedAt` (requires re-review).
+  - **Logic**: Upsert `ADPMappings` row. Set `updatedAt` = NOW, `updatedBy` = Current User. **Clear** `reviewedAt` (requires re-review).
 - `DELETE /:adpId`: Remove mapping (Reset to Unmapped).
 
-#### Mapping Review (`/api/adp/mappings/:adpId/review`)
-- `POST`: Mark as reviewed.
+#### Mapping Review & Bulk Actions
+- `POST /api/adp/mappings/:adpId/approve`
   - **Logic**: Set `reviewedAt` = NOW, `reviewedBy` = Current User.
+- `DELETE /api/adp/mappings/:adpId/reject`
+  - **Logic**: Delete the `ADPMappings` record. This reverts the ADP item to "Unmapped".
+
+- `POST /api/adp/mappings/bulk-action`
+  - **Payload**:
+    ```json
+    {
+      "action": "APPROVE" | "REJECT",
+      "ids": ["mapping_id_1", "mapping_id_2", ...]
+    }
+    ```
+  - **Logic (Approve)**: Update all matching IDs where `reviewedAt` IS NULL. Set `reviewedAt` = NOW, `reviewedBy` = Current User.
+  - **Logic (Reject)**: Delete all matching IDs.
 
 #### Global Make Mapping (`/api/adp/makes/mappings`)
 - `GET`: Return list of unique ADP Make IDs and linked SD Makes.
@@ -154,8 +164,8 @@ These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views.
 
 ### 4.5 System / Demo
 - `POST /api/admin/reset`: **Reset Data**.
-  - **Purpose**: To support the "Reset Demo Data" feature in `Login.tsx`.
-  - **Logic**: Truncate all tables and re-seed with `INITIAL_...` constants defined in the application design.
+  - **Purpose**: To support the "Reset Demo Data" feature.
+  - **Logic**: Truncate tables and re-seed defaults.
 
 ### 4.6 AI Services (Gemini Proxy)
 - `POST /api/ai/generate-description`: Proxy for Gemini API.
@@ -166,10 +176,10 @@ These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views.
 ## 5. Complex Business Logic
 
 ### A. ADP Make Mapping Propagation
-When a user maps an ADP Make (e.g., "TOY") to an SD Make (e.g., "Toyota") via `/api/adp/makes/mappings`, the backend must:
-1. Save the configuration in `ADPMakeMappings`.
+When a user maps an ADP Make (e.g., "TOY") to an SD Make (e.g., "Toyota"):
+1. Save configuration in `ADPMakeMappings`.
 2. Find all `ADPMaster` records where `adpMakeId` == "TOY".
-3. Iterate through these records in `ADPMappings`:
+3. Iterate through these records:
    - **If Unmapped**: Create a new mapping with status `MISSING_MODEL` and set `makeId` = SD Toyota ID.
    - **If status is `MISSING_MAKE`**: Update status to `MISSING_MODEL` and set `makeId` = SD Toyota ID.
    - **If status is `MISSING_MODEL`**: Update `makeId` to ensure consistency.
@@ -177,8 +187,42 @@ When a user maps an ADP Make (e.g., "TOY") to an SD Make (e.g., "Toyota") via `/
 4. **Audit**: Set `updatedBy` to the user who performed the Make Mapping.
 
 ### B. Bulk Import Handling
-- **Parsing**: Handle varied line endings (\n, \r\n) and comma separation.
-- **Transactions**: Use database transactions. If one row fails validation (e.g., invalid Make Name in Model import), log the error but decide whether to fail batch or skip row based on config (Default: Skip row, report error).
+Bulk operations involve processing CSV files to update or create Master Data.
+
+**General Process Flow:**
+1.  **Parsing**: Parse the uploaded CSV/Text file. Support both CRLF and LF line endings.
+2.  **Validation Phase**: Validate headers and iterate rows to check for data integrity.
+3.  **Execution Phase**: Perform database operations inside a Transaction.
+
+**Specific Logic per Entity:**
+
+**1. Makes Bulk Import**
+- **Format**: `Name (En), Name (Ar)`
+- **Deduplication**: Case-insensitive check on `Name`.
+- **Logic**:
+  - If Make exists (by Name), skip row.
+  - If new, insert.
+
+**2. Models Bulk Import**
+- **Format**: `Name, Make Name, Type Name`
+- **Resolution**:
+  - Lookup `Make ID` by `Make Name` (Case-insensitive).
+  - Lookup `Type ID` by `Type Name` (Case-insensitive).
+- **Validation**:
+  - If Make not found -> Skip Row / Error.
+  - If Type not found -> Skip Row / Error.
+- **Deduplication**: Check if Model Name exists for that specific `Make ID`.
+- **Logic**: Insert valid new models.
+
+**3. ADP Master Bulk Import**
+- **Format**: `MakeID, MakeEn, MakeAr, ModelID, ModelEn, ModelAr, TypeID, TypeEn, TypeAr`
+- **Logic**:
+  - **Upsert Strategy**: If `id` is not provided (usually generated), match based on the composite business key (`adpMakeId` + `adpModelId` + `adpTypeId`).
+  - If record exists, update descriptions.
+  - If record does not exist, insert.
+
+**Error Handling**:
+- The API should return a summary: `{ "success": 50, "failed": 2, "errors": ["Row 5: Make 'X' not found"] }`.
 
 ---
 
