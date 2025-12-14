@@ -28,7 +28,7 @@
   - Roles: Admin only.
 
 ### 2.3 Dashboard & Analytics
-- `GET /api/dashboard/stats`:
+- `GET /api/stats/dashboard`:
   - Returns: `{ totalMakes, totalModels, totalTypes, adpCoveragePct, mappedCount, unmappedCount, localizationScore }`.
 - `GET /api/dashboard/activity`:
   - Returns: `List<ActivityLogDTO>` (Last 10 actions).
@@ -40,6 +40,8 @@
 #### Makes
 - `GET /api/makes`: Returns `List<MakeDTO>`.
 - `POST /api/makes`: Create.
+- `PUT /api/makes/{id}`: Update Make.
+- `DELETE /api/makes/{id}`: Delete Make (Cascade delete models).
 - `POST /api/makes/bulk`: 
   - Input: CSV File.
   - Logic: Async processing. Returns `jobId`.
@@ -47,30 +49,44 @@
 #### Models
 - `GET /api/models`: Returns `List<ModelDTO>`.
 - `POST /api/models`: Create.
+- `PUT /api/models/{id}`: Update Model.
+- `DELETE /api/models/{id}`: Delete Model.
 - `POST /api/models/bulk`: Async CSV processing.
 
 #### Types
 - `GET /api/types`: Returns `List<TypeDTO>`.
 - `POST /api/types`: Create.
+- `PUT /api/types/{id}`: Update Type.
+- `DELETE /api/types/{id}`: Delete Type.
+- `POST /api/types/bulk`: Async CSV processing.
 
 ### 2.5 ADP Master & Mapping (Core)
 #### ADP Master Data
 - `GET /api/adp/master`: 
   - Inputs: `page`, `size`, `q` (Search Query).
   - Logic: Efficient pagination.
+- `POST /api/adp/master`: Create single ADP record.
+- `PUT /api/adp/master/{id}`: Update single ADP record.
+- `DELETE /api/adp/master/{id}`: Delete single ADP record.
 - `POST /api/adp/master/upload`: 
   - Input: CSV.
   - Logic: Create `ImportJob`, process asynchronously.
 
 #### ADP Mappings (Transactional)
 - `GET /api/adp/mappings`: 
-  - Filters: `status` (MAPPED, MISSING_MAKE, etc.), `dateFrom`, `dateTo`, `q` (Search).
+  - Filters: `status` (MAPPED, MISSING_MAKE, etc.), `dateFrom`, `dateTo`, `q` (Search), `userId`.
   - Returns: Paginated list of `ADPMappingDTO` joined with ADP Master info.
 - `PUT /api/adp/mappings/{adpId}`:
   - Input: `{ status, makeId, modelId }`.
   - Logic: Upsert mapping. Trigger `AuditLog`. Reset `reviewedAt` if previously approved.
-- `DELETE /api/adp/mappings/{adpId}`:
-  - Logic: Delete mapping record (Revert to Unmapped). Trigger `AuditLog`.
+
+#### Mapping Actions
+- `POST /api/adp/mappings/{adpId}/approve`:
+  - Logic: Set `reviewedAt` = NOW, `reviewedBy` = CurrentUser.
+- `DELETE /api/adp/mappings/{adpId}/reject`:
+  - Logic: Delete mapping (Revert to unmapped).
+- `POST /api/adp/mappings/bulk-action`:
+  - Input: `{ ids: [], action: 'APPROVE' | 'REJECT' }`.
 
 #### ADP Global Mappings (Propagation Rules)
 - `GET /api/adp/makes`: Returns unique ADP Makes and their SD Mapping status.
@@ -84,15 +100,8 @@
 - `GET /api/adp/types`: Returns unique ADP Types.
 - `POST /api/adp/types/map`: Similar propagation logic for Types.
 
-#### Mapping Review & Audit
-- `GET /api/adp/mappings/review`:
-  - Filters: `status` (PENDING, REVIEWED).
-- `POST /api/adp/mappings/{adpId}/approve`:
-  - Logic: Set `reviewedAt` = NOW, `reviewedBy` = CurrentUser.
-- `POST /api/adp/mappings/{adpId}/reject`:
-  - Logic: Delete mapping (Revert to unmapped).
-- `POST /api/adp/mappings/batch-action`:
-  - Input: `{ ids: [], action: 'APPROVE' | 'REJECT' }`.
+#### History
+- `GET /api/adp/history/{adpId}`: Returns audit history list for a specific ADP record.
 
 ### 2.6 Reporting & Export
 - `GET /api/reports/export`:

@@ -1,67 +1,23 @@
-import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/storageService';
-import { ADPTypeMapping, VehicleType } from '../types';
+import React, { useState } from 'react';
+import { useADPUniqueTypes, useSaveTypeMapping } from '../hooks/useADPData';
+import { useTypes } from '../hooks/useVehicleData';
 import { Card, Button, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, SearchableSelect, Input } from '../components/UI';
-import { Link, CheckCircle2, AlertTriangle, RefreshCw, Search } from 'lucide-react';
+import { Link, CheckCircle2, AlertTriangle, RefreshCw, Search, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface UniqueADPType {
-  adpTypeId: string;
-  typeEnDesc: string;
-  typeArDesc: string;
-  sdTypeId?: string; // If mapped
-}
-
 export const ADPVehicleTypesView: React.FC = () => {
-  const [uniqueTypes, setUniqueTypes] = useState<UniqueADPType[]>([]);
-  const [sdTypes, setSdTypes] = useState<VehicleType[]>([]);
-  const [typeMappings, setTypeMappings] = useState<ADPTypeMapping[]>([]);
-  
-  // Modal State
+  const [page, setPage] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const { data, isLoading, refetch } = useADPUniqueTypes({ page, size: 20, q: searchQuery });
+  const { data: sdTypes = [] } = useTypes();
+  const saveMappingMutation = useSaveTypeMapping();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedAdpType, setSelectedAdpType] = useState<UniqueADPType | null>(null);
+  const [selectedAdpType, setSelectedAdpType] = useState<any | null>(null);
   const [selectedSdTypeId, setSelectedSdTypeId] = useState<string>('');
 
-  // Pagination & Search
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
-  const ITEMS_PER_PAGE = 20;
-
-  useEffect(() => {
-    refreshData();
-  }, []);
-
-  // Reset page on search
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
-
-  const refreshData = () => {
-    const masterData = DataService.getADPMaster();
-    const mappings = DataService.getADPTypeMappings();
-    const types = DataService.getTypes();
-
-    setSdTypes(types);
-    setTypeMappings(mappings);
-
-    // Extract unique types from ADP Master
-    const uniqueMap = new Map<string, UniqueADPType>();
-    masterData.forEach(item => {
-      if (!uniqueMap.has(item.adpTypeId)) {
-        const mappedSdId = mappings.find(m => m.adpTypeId === item.adpTypeId)?.sdTypeId;
-        uniqueMap.set(item.adpTypeId, {
-          adpTypeId: item.adpTypeId,
-          typeEnDesc: item.typeEnDesc,
-          typeArDesc: item.typeArDesc,
-          sdTypeId: mappedSdId
-        });
-      }
-    });
-
-    setUniqueTypes(Array.from(uniqueMap.values()));
-  };
-
-  const handleOpenModal = (item: UniqueADPType) => {
+  const handleOpenModal = (item: any) => {
     setSelectedAdpType(item);
     setSelectedSdTypeId(item.sdTypeId || '');
     setIsModalOpen(true);
@@ -69,34 +25,17 @@ export const ADPVehicleTypesView: React.FC = () => {
 
   const handleSaveMapping = () => {
     if (!selectedAdpType || !selectedSdTypeId) return;
-
-    // Save the Global Type Mapping
-    const newMapping: ADPTypeMapping = {
-      adpTypeId: selectedAdpType.adpTypeId,
-      sdTypeId: selectedSdTypeId,
-      updatedAt: new Date().toISOString()
-    };
-
-    // Update or Add to local mapping list
-    const updatedMappings = [...typeMappings.filter(m => m.adpTypeId !== selectedAdpType.adpTypeId), newMapping];
-    DataService.saveADPTypeMappings(updatedMappings);
-
-    setIsModalOpen(false);
-    refreshData();
-    toast.success("Type mapping saved successfully.");
+    saveMappingMutation.mutate({
+        adpTypeId: selectedAdpType.adpTypeId,
+        sdTypeId: selectedSdTypeId
+    }, {
+        onSuccess: () => {
+            setIsModalOpen(false);
+            toast.success("Type mapping saved");
+            refetch();
+        }
+    });
   };
-
-  // Filter Logic
-  const filteredTypes = uniqueTypes.filter(item => {
-     const query = searchQuery.toLowerCase();
-     return item.adpTypeId.toLowerCase().includes(query) ||
-            item.typeEnDesc.toLowerCase().includes(query) ||
-            (item.typeArDesc && item.typeArDesc.includes(searchQuery));
-  });
-
-  // Pagination Logic
-  const totalPages = Math.ceil(filteredTypes.length / ITEMS_PER_PAGE);
-  const paginatedTypes = filteredTypes.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   return (
     <div className="space-y-6">
@@ -105,7 +44,7 @@ export const ADPVehicleTypesView: React.FC = () => {
            <h1 className="text-2xl font-bold text-slate-900">ADP Vehicle Types</h1>
            <p className="text-slate-500">Map unique ADP Vehicle Types to Internal Classification.</p>
         </div>
-        <Button onClick={refreshData} variant="secondary">
+        <Button onClick={() => refetch()} variant="secondary">
           <RefreshCw size={16} /> Refresh
         </Button>
       </div>
@@ -114,14 +53,15 @@ export const ADPVehicleTypesView: React.FC = () => {
         <Search className="absolute top-3 left-3 text-slate-400" size={18} />
         <Input 
           label="" 
-          placeholder="Search by ID or description..." 
+          placeholder="Search..." 
           value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
+          onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
           className="pl-10"
         />
       </div>
 
       <Card className="overflow-hidden">
+        {isLoading ? <div className="p-10 flex justify-center"><Loader2 className="animate-spin" /></div> : (
         <div className="overflow-x-auto">
           <table className="w-full">
             <TableHeader>
@@ -133,9 +73,8 @@ export const ADPVehicleTypesView: React.FC = () => {
               <TableHead>Actions</TableHead>
             </TableHeader>
             <tbody>
-              {paginatedTypes.map(item => {
+              {(data?.content || []).map((item: any) => {
                 const mappedSdType = sdTypes.find(t => t.id === item.sdTypeId);
-                
                 return (
                   <TableRow key={item.adpTypeId} onClick={() => handleOpenModal(item)}>
                     <TableCell>
@@ -174,22 +113,11 @@ export const ADPVehicleTypesView: React.FC = () => {
                   </TableRow>
                 );
               })}
-              {filteredTypes.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
-                    No matches found.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
-        <Pagination 
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          totalItems={filteredTypes.length}
-        />
+        )}
+        <Pagination currentPage={page} totalPages={data?.totalPages || 1} onPageChange={setPage} totalItems={data?.totalElements || 0} />
       </Card>
 
       <Modal 
@@ -216,25 +144,16 @@ export const ADPVehicleTypesView: React.FC = () => {
                      <span className="text-xs text-slate-500 block">English Desc</span>
                      <span className="font-medium text-slate-900">{selectedAdpType.typeEnDesc}</span>
                    </div>
-                   <div className="col-span-2">
-                     <span className="text-xs text-slate-500 block">Arabic Desc</span>
-                     <span className="font-medium text-slate-900" dir="rtl">{selectedAdpType.typeArDesc}</span>
-                   </div>
                 </div>
              </div>
           )}
-
           <div className="space-y-2">
             <SearchableSelect 
                label="Map to Internal Vehicle Type"
                value={selectedSdTypeId}
                onChange={value => setSelectedSdTypeId(value)}
                options={sdTypes.map(t => ({ value: t.id, label: t.name }))}
-               placeholder="Search for type..."
             />
-            <p className="text-xs text-slate-500 mt-2">
-               Select the standard vehicle type that corresponds to this ADP entry.
-            </p>
           </div>
         </div>
       </Modal>

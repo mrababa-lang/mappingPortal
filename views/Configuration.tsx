@@ -1,31 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/storageService';
+import { useAppConfig, useUpdateAppConfig } from '../hooks/useAdminData';
 import { AppConfig } from '../types';
 import { Card, Button, Switch, Input } from '../components/UI';
-import { Sparkles, Shield, AlertOctagon, Save, Activity, Key } from 'lucide-react';
+import { Sparkles, Shield, AlertOctagon, Save, Activity, Key, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const ConfigurationView: React.FC = () => {
-  const [config, setConfig] = useState<AppConfig | null>(null);
+  const { data: serverConfig, isLoading } = useAppConfig();
+  const updateConfigMutation = useUpdateAppConfig();
+  
+  const [localConfig, setLocalConfig] = useState<AppConfig | null>(null);
 
   useEffect(() => {
-    setConfig(DataService.getAppConfig());
-  }, []);
+    if (serverConfig) {
+      setLocalConfig(serverConfig);
+    }
+  }, [serverConfig]);
 
   const handleSave = () => {
-    if (config) {
-      DataService.saveAppConfig(config);
-      toast.success("Configuration updated successfully.");
+    if (localConfig) {
+      updateConfigMutation.mutate(localConfig, {
+        onSuccess: () => toast.success("Configuration updated successfully.")
+      });
     }
   };
 
   const updateConfig = (key: keyof AppConfig, value: any) => {
-    if (config) {
-      setConfig({ ...config, [key]: value });
+    if (localConfig) {
+      setLocalConfig({ ...localConfig, [key]: value });
     }
   };
 
-  if (!config) return null;
+  if (isLoading || !localConfig) return <div className="p-10 flex justify-center"><Loader2 className="animate-spin" /></div>;
 
   return (
     <div className="space-y-6">
@@ -34,7 +40,7 @@ export const ConfigurationView: React.FC = () => {
            <h1 className="text-2xl font-bold text-slate-900">System Configuration</h1>
            <p className="text-slate-500">Manage global application settings and AI features.</p>
         </div>
-        <Button onClick={handleSave} variant="primary">
+        <Button onClick={handleSave} variant="primary" isLoading={updateConfigMutation.isPending}>
           <Save size={18} />
           Save Changes
         </Button>
@@ -55,7 +61,7 @@ export const ConfigurationView: React.FC = () => {
                  <p className="text-xs text-slate-500 mt-1">Allow AI to suggest mappings and generate descriptions using Google Gemini.</p>
                </div>
                <Switch 
-                 checked={config.enableAI} 
+                 checked={localConfig.enableAI} 
                  onChange={(val) => updateConfig('enableAI', val)} 
                />
              </div>
@@ -63,16 +69,16 @@ export const ConfigurationView: React.FC = () => {
              <div className="p-3 bg-slate-50 rounded-lg space-y-2">
                 <div className="flex justify-between">
                    <h3 className="text-sm font-semibold text-slate-800">Confidence Threshold</h3>
-                   <span className="text-xs font-bold text-indigo-600">{config.aiConfidenceThreshold}%</span>
+                   <span className="text-xs font-bold text-indigo-600">{localConfig.aiConfidenceThreshold}%</span>
                 </div>
                 <p className="text-xs text-slate-500">Minimum confidence score required for auto-suggestions.</p>
                 <input 
                   type="range" 
                   min="50" 
                   max="100" 
-                  value={config.aiConfidenceThreshold}
+                  value={localConfig.aiConfidenceThreshold}
                   onChange={(e) => updateConfig('aiConfidenceThreshold', parseInt(e.target.value))}
-                  disabled={!config.enableAI}
+                  disabled={!localConfig.enableAI}
                   className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 disabled:opacity-50"
                 />
              </div>
@@ -86,16 +92,16 @@ export const ConfigurationView: React.FC = () => {
                    label=""
                    type="password"
                    placeholder="Enter API Key (Leave empty to use system default)"
-                   value={config.apiKey || ''}
+                   value={localConfig.apiKey || ''}
                    onChange={(e) => updateConfig('apiKey', e.target.value)}
-                   disabled={!config.enableAI}
+                   disabled={!localConfig.enableAI}
                 />
                 <p className="text-[10px] text-slate-400 leading-tight">
                    Optional. Provide a specific Google Gemini API Key for this instance. If left blank, the system environment key will be used.
                 </p>
              </div>
              
-             {!config.enableAI && (
+             {!localConfig.enableAI && (
                 <div className="flex items-start gap-2 p-3 bg-amber-50 text-amber-800 rounded-md text-sm">
                    <AlertOctagon size={16} className="shrink-0 mt-0.5" />
                    <p>AI features are currently disabled. Users will not see suggestions for models or mappings.</p>
@@ -118,7 +124,7 @@ export const ConfigurationView: React.FC = () => {
                  <p className="text-xs text-slate-500 mt-1">Restrict access to Admins only. Useful during updates.</p>
                </div>
                <Switch 
-                 checked={config.maintenanceMode} 
+                 checked={localConfig.maintenanceMode} 
                  onChange={(val) => updateConfig('maintenanceMode', val)} 
                />
              </div>
@@ -129,7 +135,7 @@ export const ConfigurationView: React.FC = () => {
                  <p className="text-xs text-slate-500 mt-1">Track comprehensive user actions in the history log.</p>
                </div>
                <Switch 
-                 checked={config.enableAuditLog} 
+                 checked={localConfig.enableAuditLog} 
                  onChange={(val) => updateConfig('enableAuditLog', val)} 
                />
              </div>
@@ -141,7 +147,7 @@ export const ConfigurationView: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2">
                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                   <span className="text-xs text-slate-500">All systems operational. Local Storage backend active.</span>
+                   <span className="text-xs text-slate-500">All systems operational. Remote API connected.</span>
                 </div>
              </div>
           </div>

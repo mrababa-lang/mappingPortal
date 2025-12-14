@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { DataService } from '../services/storageService';
+import { AuthService } from '../services/authService';
 import { Button, Input } from '../components/UI';
-import { ArrowRight, Lock, Mail, RefreshCw } from 'lucide-react';
+import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface LoginViewProps {
@@ -14,42 +14,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API latency
-    setTimeout(() => {
-      try {
-        const users = DataService.getUsers();
-        // Mock authentication
-        const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-        if (user && user.status === 'Active') {
-          // Verify Password
-          if (user.password && user.password !== password) {
-            toast.error('Invalid credentials.');
-          } else {
-            // Success
-            onLogin(user);
-            toast.success(`Welcome back, ${user.name}`);
-          }
-        } else {
-          toast.error('Invalid credentials or inactive account.');
-        }
-      } catch (error) {
-        console.error("Login Error", error);
-        toast.error("An unexpected error occurred. Please try resetting data.");
-      }
+    try {
+      const user = await AuthService.login(email, password);
+      onLogin(user);
+      toast.success(`Welcome back, ${user.name}`);
+    } catch (error) {
+      console.error("Login Error", error);
+      toast.error("Invalid credentials or server error.");
+    } finally {
       setIsLoading(false);
-    }, 800);
-  };
-
-  const handleResetData = () => {
-    if (window.confirm('This will reset all data (Users, Makes, Mappings) to the default state. Continue?')) {
-      localStorage.clear();
-      window.location.reload();
-      toast.success("System data reset successfully.");
     }
   };
 
@@ -71,7 +48,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               <Input 
                 label="Email Address" 
                 type="email" 
-                placeholder="admin@firsttech.ae"
+                placeholder="admin@example.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="pl-10"
@@ -100,20 +77,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             Sign In <ArrowRight size={18} />
           </Button>
 
-          <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-3">
-             <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-center w-full">
-               <p className="text-xs text-indigo-800 font-semibold mb-1">Demo Credentials</p>
-               <p className="text-xs text-indigo-600 font-mono">admin@firsttech.ae / password</p>
-             </div>
-             
-             <button 
-               type="button"
-               onClick={handleResetData}
-               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors mt-2"
-               title="Clear local storage and reset to defaults"
-             >
-               <RefreshCw size={12} /> Reset Demo Data
-             </button>
+          <div className="pt-4 border-t border-slate-100 text-center">
+             <p className="text-xs text-slate-400">
+               Connects to Local Backend (Port 8080)
+             </p>
           </div>
         </form>
       </div>
