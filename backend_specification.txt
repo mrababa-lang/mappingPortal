@@ -41,16 +41,16 @@ All list endpoints (GET) must support pagination query parameters:
   - **Password Hashing**: Use bcrypt or Argon2.
   - **JWT**: Tokens should expire (e.g., 24h).
   - **Role-Based Access Control (RBAC)**:
-    - `Admin`: Full access.
-    - `Editor`: Can Create/Update/Delete data and mappings.
-    - `Viewer`: Read-only access to GET endpoints.
+    - `Admin`: Full access to everything (Vehicle Mgmt, ADP, Admin).
+    - `Mapping Admin`: Can access ADP and Vehicle Management sections.
+    - `Mapping User`: Can access ADP sections only, excluding Mapping Review.
 
 ---
 
 ## 4. API Endpoints
 
 ### 4.1 Dashboard & Analytics
-These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views to avoid fetching entire datasets.
+These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views.
 
 - `GET /api/stats/dashboard`
   - **Response**: 
@@ -62,7 +62,9 @@ These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views to avoid fe
     ```
 
 - `GET /api/stats/activity`
-  - **Query Params**: `dateFrom`, `dateTo`, `userId`
+  - **Query Params**: 
+    - `dateFrom` (ISO Date), `dateTo` (ISO Date)
+    - `userId` (Filter by contributor)
   - **Response**: 
     ```json
     {
@@ -75,98 +77,89 @@ These endpoints support the `Dashboard.tsx` and `Tracking.tsx` views to avoid fe
 - `GET /api/users`: List users (Pagination + Search).
 - `POST /api/users`: Create user (Hash password).
 - `PUT /api/users/:id`: Update details.
-- `DELETE /api/users/:id`: Soft delete.
+- `DELETE /api/users/:id`: Soft delete or Hard delete based on policy.
 
 ### 4.3 Vehicle Master Data
 
 #### Makes (`/api/makes`)
 - `GET`: Supports `q` (Search name).
-  - **Requirement**: Must allow frontend to identify associated vehicle types. The simplest approach is returning the Makes, and allowing the frontend to compute types via the Models list, OR providing a `GET /api/makes/:id/types` endpoint.
 - `POST`: Create Make.
-  - **Validation**: `Make Name` must be unique (Case-insensitive). Return 409 Conflict if exists.
+  - **Validation**: `Name` must be unique (Case-insensitive). Return 409 Conflict if exists.
 - `PUT /:id`: Update.
-  - **Validation**: Check uniqueness excluding current ID.
-- `DELETE /:id`: Delete. Prevent if models exist (Foreign Key Constraint).
-- `POST /bulk`: Accept CSV/JSON for bulk import. Skips duplicates.
+- `DELETE /:id`: **Cascade Delete Logic**.
+  - When a Make is deleted, the backend **MUST**:
+    1. Delete all `Models` associated with this Make.
+    2. Update any `ADPMappings` that reference the deleted Make or its Models:
+       - If mapping referenced a deleted model -> Reset to `Unmapped`.
+       - If mapping referenced this make (status `MISSING_MODEL`) -> Reset to `Unmapped`.
+- `POST /bulk`: Bulk import CSV.
+  - **CSV Format**: `Name (En), Name (Ar)`
+  - **Logic**: Ignore duplicates based on Name.
 
 #### Vehicle Types (`/api/types`)
 - `GET`: Supports `q`.
 - `POST`: Create. **Validation**: Name unique.
 - `PUT /:id`, `DELETE /:id`.
-- `POST /bulk`: Bulk import.
+- `POST /bulk`: Bulk import CSV.
+  - **CSV Format**: `Name, Description` (Description can contain commas).
 
 #### Models (`/api/models`)
 - `GET`: Supports `q`, `makeId` (Filter by Make).
 - `POST`: Create.
-  - **Validation**: The combination of (`makeId` + `name`) must be unique. A Make cannot have two models with the same name.
-- `PUT /:id`: Update. Check composite uniqueness.
-- `DELETE /:id`.
-- `POST /bulk`: Bulk import. 
-  - **Logic**: Resolve Make Name and Type Name to IDs. Error if not found. Skip if Make+Model combination exists.
+  - **Validation**: The combination of (`makeId` + `name`) must be unique.
+- `PUT /:id`: Update.
+- `DELETE /:id`: **Cascade Logic**.
+  - When a Model is deleted, update `ADPMappings` referencing this `modelId` to `Unmapped` (or preserve ADP ID but clear model link).
+- `POST /bulk`: Bulk import CSV.
+  - **CSV Format**: `Name, Make Name, Type Name`
+  - **Logic**: Backend must resolve 'Make Name' and 'Type Name' to IDs. Skip row if not found.
 
 ### 4.4 ADP Integration
 
-#### Master Data
-- `GET /api/adp/master`: List raw ADP data.
+#### Master Data (`/api/adp/master`)
+- `GET`: List raw ADP data.
   - **Search (`q`)**: Match against ADP Make ID, ADP Model ID, En/Ar Descriptions.
-- `POST /api/adp/master`: Manual entry.
-- `POST /api/adp/master/bulk`: Bulk import.
+- `POST`: Create single entry.
+- `DELETE`: Delete entry (Cascade: delete associated mapping).
+- `POST /bulk`: Bulk import CSV.
+  - **CSV Format**: `MakeID, MakeEn, MakeAr, ModelID, ModelEn, ModelAr, TypeID, TypeEn, TypeAr`
 
-#### Mappings (`ADPMapping.tsx`)
-- `GET /api/adp/mappings`: List joined Master + Mapping status.
+#### Mappings (`/api/adp/mappings`)
+- `GET`: List joined Master + Mapping status.
   - **Query Params**:
-    - `status`: 'all' | 'mapped' | 'unmapped' | 'issues' (Missing Make/Model) | 'pending_review'
+    - `status`: 'all' | 'mapped' | 'unmapped' | 'issues' | 'pending'
     - `dateFrom`, `dateTo`: Filter by `updatedAt`.
     - `q`: Search against ADP data OR mapped SD Make/Model names.
-  - **Response Structure (Critical)**:
-    Must include flattened details to support the frontend grid and CSV export requirements:
-    ```json
-    [{
-      "id": "mapping_uuid",
-      "adpId": "adp_master_uuid",
-      "adpMakeId": "TOY",
-      "adpModelId": "CAM",
-      "adpMakeEn": "Toyota",
-      "adpModelEn": "Camry",
-      "status": "MAPPED",
-      "sdMakeId": "sd_make_uuid",   // REQUIRED
-      "sdMakeName": "Toyota",
-      "sdModelId": "sd_model_uuid", // REQUIRED
-      "sdModelName": "Camry",
-      "updatedAt": "...",
-      "updatedBy": "..."
-    }]
-    ```
-- `PUT /api/adp/mappings/:adpId`: Create or Update mapping.
+- `PUT /:adpId`: Create or Update mapping.
   - **Payload**: 
     ```json
     { 
       "status": "MAPPED" | "MISSING_MAKE" | "MISSING_MODEL", 
-      "modelId": "uuid" (if MAPPED),
-      "makeId": "uuid" (if MISSING_MODEL)
+      "modelId": "uuid" (required if MAPPED),
+      "makeId": "uuid" (required if MISSING_MODEL)
     }
     ```
-  - **Logic**: Set `updatedAt` = NOW, `updatedBy` = Current User. Clear `reviewedAt`.
-- `DELETE /api/adp/mappings/:adpId`: Remove mapping (Reset to Unmapped).
+  - **Logic**: Set `updatedAt` = NOW, `updatedBy` = Current User. **Clear** `reviewedAt` (requires re-review).
+- `DELETE /:adpId`: Remove mapping (Reset to Unmapped).
 
-#### Mapping Review (`MappingReview.tsx`)
-- `POST /api/adp/mappings/:adpId/review`
+#### Mapping Review (`/api/adp/mappings/:adpId/review`)
+- `POST`: Mark as reviewed.
   - **Logic**: Set `reviewedAt` = NOW, `reviewedBy` = Current User.
 
-#### Make-Level Mapping (`ADPMakes.tsx`)
-- `GET /api/adp/makes/mappings`: Return list of unique ADP Make IDs and linked SD Makes.
-- `POST /api/adp/makes/mappings`: Create/Update global make link.
+#### Global Make Mapping (`/api/adp/makes/mappings`)
+- `GET`: Return list of unique ADP Make IDs and linked SD Makes.
+- `POST`: Create/Update global make link.
   - **Payload**: `{ "adpMakeId": "TOY", "sdMakeId": "uuid" }`
-  - **Trigger**: Execute **Propagation Logic** (See Section 5).
+  - **Trigger**: Execute **Propagation Logic** (Section 5A).
 
-### 4.5 AI Services (Gemini Proxy)
-Frontend does not hold API keys. Requests are proxied here.
-- `POST /api/ai/generate-description`
-  - **Input**: `{ "name": "SUV", "context": "type" }`
-  - **Logic**: Call Gemini `generateContent`. Return text.
-- `POST /api/ai/suggest-models`
-  - **Input**: `{ "makeName": "Toyota" }`
-  - **Logic**: Call Gemini with JSON schema for array of strings.
+### 4.5 System / Demo
+- `POST /api/admin/reset`: **Reset Data**.
+  - **Purpose**: To support the "Reset Demo Data" feature in `Login.tsx`.
+  - **Logic**: Truncate all tables and re-seed with `INITIAL_...` constants defined in the application design.
+
+### 4.6 AI Services (Gemini Proxy)
+- `POST /api/ai/generate-description`: Proxy for Gemini API.
+- `POST /api/ai/suggest-models`: Proxy for Gemini API JSON mode.
 
 ---
 
@@ -184,26 +177,10 @@ When a user maps an ADP Make (e.g., "TOY") to an SD Make (e.g., "Toyota") via `/
 4. **Audit**: Set `updatedBy` to the user who performed the Make Mapping.
 
 ### B. Bulk Import Handling
-- **Endpoint**: `POST /.../bulk`
-- **Format**: Multipart/form-data (CSV) or JSON array.
-- **Validation**:
-  - CSV parsing happens on backend.
-  - **Make Import**: Check for existing names (case-insensitive). Ignore duplicates.
-  - **Model Import**: Check for existing `Make ID + Name` combinations. Ignore duplicates.
-  - Return detailed error report: `{ "success": 50, "errors": [{ "row": 2, "error": "Duplicate Model Name for this Make" }] }`.
-
-### C. Activity Tracking Implementation
-- The `ADPMappings` table acts as the audit log.
-- Ensure database indexes on `updated_at` and `updated_by` columns for fast analytics queries.
+- **Parsing**: Handle varied line endings (\n, \r\n) and comma separation.
+- **Transactions**: Use database transactions. If one row fails validation (e.g., invalid Make Name in Model import), log the error but decide whether to fail batch or skip row based on config (Default: Skip row, report error).
 
 ---
 
 ## 6. Database Schema Reference
 (See `database_schema.txt` for SQL definitions)
-1. **Users**: `id, name, email, password, role, status`
-2. **Makes**: `id, name (UNIQUE)`
-3. **VehicleTypes**: `id, name (UNIQUE)`
-4. **Models**: `id, make_id, type_id, name` -> **UNIQUE CONSTRAINT(make_id, name)**
-5. **ADPMaster**: `id, adp_make_id...`
-6. **ADPMappings**: `id, adp_id, model_id, status, updated_by, updated_at, reviewed_by...`
-7. **ADPMakeMappings**: `adp_make_id, sd_make_id, updated_at`

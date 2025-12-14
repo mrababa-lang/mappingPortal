@@ -5,92 +5,96 @@
 -- 1. Users Table
 -- Stores user accounts, roles, and status for access control.
 CREATE TABLE Users (
-    id VARCHAR(50) PRIMARY KEY, -- Unique identifier (e.g., UUID or string ID)
+    id VARCHAR(50) PRIMARY KEY, -- UUID recommended
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL, -- Hashed password for authentication
-    role VARCHAR(20) CHECK (role IN ('Admin', 'Editor', 'Viewer')), -- Role-based access control
+    password VARCHAR(255) NOT NULL, -- Hashed
+    role VARCHAR(20) CHECK (role IN ('Admin', 'Mapping Admin', 'Mapping User')),
     status VARCHAR(20) CHECK (status IN ('Active', 'Inactive')),
     last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 2. Vehicle Types Table
--- Defines the classification of vehicles (e.g., SUV, Sedan, Truck).
+-- Classification (e.g., SUV, Sedan).
 CREATE TABLE VehicleTypes (
     id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE, -- Unique Name
-    description TEXT
+    name VARCHAR(100) NOT NULL UNIQUE,
+    name_ar VARCHAR(100), -- Arabic Name
+    description TEXT,
+    description_ar TEXT -- Arabic Description
 );
 
 -- 3. Makes Table
--- Stores vehicle manufacturers.
+-- Manufacturers (e.g., Toyota).
 CREATE TABLE Makes (
     id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE -- Unique Name
+    name VARCHAR(100) NOT NULL UNIQUE,
+    name_ar VARCHAR(100) -- Arabic Name
 );
 
 -- 4. Models Table
--- Specific vehicle models linked to a Make and a Vehicle Type.
--- Constraint: A Model Name must be unique within a specific Make.
+-- Models linked to Make and Type.
 CREATE TABLE Models (
     id VARCHAR(50) PRIMARY KEY,
     make_id VARCHAR(50) NOT NULL,
     type_id VARCHAR(50) NOT NULL,
     name VARCHAR(100) NOT NULL,
+    name_ar VARCHAR(100), -- Arabic Name
     FOREIGN KEY (make_id) REFERENCES Makes(id) ON DELETE CASCADE,
     FOREIGN KEY (type_id) REFERENCES VehicleTypes(id) ON DELETE RESTRICT,
-    CONSTRAINT uc_models_make_name UNIQUE (make_id, name) -- Uniqueness Constraint
+    CONSTRAINT uc_models_make_name UNIQUE (make_id, name)
 );
 
 -- 5. ADP Master Data Table
--- Stores the raw master data imported from ADP (External System).
--- Contains English and Arabic descriptions and external IDs.
+-- Raw import from external system.
 CREATE TABLE ADPMaster (
     id VARCHAR(50) PRIMARY KEY,
     adp_make_id VARCHAR(50),
-    make_ar_desc NVARCHAR(200),
     make_en_desc VARCHAR(200),
+    make_ar_desc NVARCHAR(200),
     adp_model_id VARCHAR(50),
-    model_ar_desc NVARCHAR(200),
     model_en_desc VARCHAR(200),
+    model_ar_desc NVARCHAR(200),
     adp_type_id VARCHAR(50),
-    type_ar_desc NVARCHAR(200),
-    type_en_desc VARCHAR(200)
+    type_en_desc VARCHAR(200),
+    type_ar_desc NVARCHAR(200)
 );
 
 -- 6. ADP Mappings Table
--- Links external ADP data (ADPMaster) to internal SlashData Models (Models).
--- Tracks who made the mapping and who reviewed it.
+-- The core mapping logic. Links ADP Master ID to SlashData Models/Makes.
 CREATE TABLE ADPMappings (
     id VARCHAR(50) PRIMARY KEY,
-    model_id VARCHAR(50), -- The internal system model (Nullable if status is MISSING_MODEL/MAKE)
-    make_id VARCHAR(50), -- Capture Make ID if Model is missing
-    adp_id VARCHAR(50) NOT NULL UNIQUE, -- The external ADP record being mapped
-    status VARCHAR(50) DEFAULT 'MAPPED', -- 'MAPPED', 'MISSING_MODEL', 'MISSING_MAKE'
+    adp_id VARCHAR(50) NOT NULL UNIQUE, -- 1-to-1 with ADPMaster
+    
+    -- Mapping Targets
+    status VARCHAR(50) DEFAULT 'MAPPED' CHECK (status IN ('MAPPED', 'MISSING_MAKE', 'MISSING_MODEL')),
+    model_id VARCHAR(50), -- Populated if MAPPED
+    make_id VARCHAR(50),  -- Populated if MISSING_MODEL (partial map)
+    
+    -- Audit
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_by VARCHAR(50), -- User who performed the mapping
+    updated_by VARCHAR(50),
     reviewed_at TIMESTAMP,
-    reviewed_by VARCHAR(50), -- User who approved/reviewed the mapping
-    FOREIGN KEY (model_id) REFERENCES Models(id) ON DELETE CASCADE,
-    FOREIGN KEY (make_id) REFERENCES Makes(id) ON DELETE CASCADE,
+    reviewed_by VARCHAR(50),
+
+    -- Constraints
     FOREIGN KEY (adp_id) REFERENCES ADPMaster(id) ON DELETE CASCADE,
+    FOREIGN KEY (model_id) REFERENCES Models(id) ON DELETE SET NULL,
+    FOREIGN KEY (make_id) REFERENCES Makes(id) ON DELETE SET NULL,
     FOREIGN KEY (updated_by) REFERENCES Users(id) ON DELETE SET NULL,
     FOREIGN KEY (reviewed_by) REFERENCES Users(id) ON DELETE SET NULL
 );
 
 -- 7. ADP Make Mappings Table
--- Stores the high-level mapping between ADP Make IDs and SlashData Makes.
--- Used to auto-populate individual ADP mappings.
+-- Global rules for mapping ADP Make Codes to SD Makes.
 CREATE TABLE ADPMakeMappings (
-    adp_make_id VARCHAR(50) NOT NULL,
+    adp_make_id VARCHAR(50) NOT NULL PRIMARY KEY,
     sd_make_id VARCHAR(50) NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (adp_make_id),
     FOREIGN KEY (sd_make_id) REFERENCES Makes(id) ON DELETE CASCADE
 );
 
--- Indexes for Performance
+-- Indexes
 CREATE INDEX idx_models_make ON Models(make_id);
-CREATE INDEX idx_models_type ON Models(type_id);
-CREATE INDEX idx_adp_mapping_model ON ADPMappings(model_id);
-CREATE INDEX idx_adp_mapping_adp ON ADPMappings(adp_id);
+CREATE INDEX idx_adp_mapping_status ON ADPMappings(status);
+CREATE INDEX idx_adp_mapping_updated ON ADPMappings(updated_at);

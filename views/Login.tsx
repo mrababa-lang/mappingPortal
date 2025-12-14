@@ -36,7 +36,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       } else {
         setError('Invalid credentials or inactive account.');
         // For demo purposes, hint at valid credentials
-        if (!email) setError('Try "admin@firsttech.ae" with password "password"');
+        if (!email) setError('Hint: admin@firsttech.ae / password');
       }
       setIsLoading(false);
     }, 800);

@@ -51,11 +51,11 @@ const getRecentDate = (hoursAgo: number) => {
 
 export const INITIAL_ADP_MAPPING = [
   { id: '1', modelId: '1', adpId: '1', updatedBy: '1', updatedAt: getRecentDate(2) }, // 2 hours ago by Admin
-  { id: '2', modelId: '3', adpId: '2', updatedBy: '2', updatedAt: getRecentDate(25) }, // 25 hours ago by Editor
+  { id: '2', modelId: '3', adpId: '2', updatedBy: '2', updatedAt: getRecentDate(25) }, // 25 hours ago by Mapping Admin
 ];
 
 export const INITIAL_USERS = [
-  { id: '1', name: 'Admin User', email: 'admin@firsttech.ae', password: 'password', role: 'Admin', status: 'Active', lastActive: '2023-10-27 10:30 AM' },
-  { id: '2', name: 'John Doe', email: 'john@firsttech.ae', password: 'password', role: 'Editor', status: 'Active', lastActive: '2023-10-26 04:15 PM' },
-  { id: '3', name: 'Jane Smith', email: 'jane@firsttech.ae', password: 'password', role: 'Viewer', status: 'Inactive', lastActive: '2023-09-15 09:00 AM' },
+  { id: '1', name: 'Super Admin', email: 'admin@firsttech.ae', password: 'password', role: 'Admin', status: 'Active', lastActive: '2023-10-27 10:30 AM' },
+  { id: '2', name: 'Map Manager', email: 'manager@firsttech.ae', password: 'password', role: 'Mapping Admin', status: 'Active', lastActive: '2023-10-26 04:15 PM' },
+  { id: '3', name: 'Data Entry', email: 'user@firsttech.ae', password: 'password', role: 'Mapping User', status: 'Active', lastActive: '2023-09-15 09:00 AM' },
 ];

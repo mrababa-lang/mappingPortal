@@ -17,7 +17,7 @@ export const UsersView: React.FC = () => {
   
   // Form State
   const [formData, setFormData] = useState<Partial<User>>({ 
-    name: '', email: '', role: 'Viewer', status: 'Active', password: ''
+    name: '', email: '', role: 'Mapping User', status: 'Active', password: ''
   });
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export const UsersView: React.FC = () => {
       setFormData({ ...user, password: '' });
     } else {
       setEditingId(null);
-      setFormData({ name: '', email: '', role: 'Viewer', status: 'Active', password: '' });
+      setFormData({ name: '', email: '', role: 'Mapping User', status: 'Active', password: '' });
     }
     setIsModalOpen(true);
   };
@@ -69,7 +69,7 @@ export const UsersView: React.FC = () => {
         name: formData.name!,
         email: formData.email!,
         password: formData.password!,
-        role: formData.role! as 'Admin' | 'Editor' | 'Viewer',
+        role: formData.role! as 'Admin' | 'Mapping Admin' | 'Mapping User',
         status: formData.status! as 'Active' | 'Inactive',
         lastActive: 'Just now'
       };
@@ -232,8 +232,8 @@ export const UsersView: React.FC = () => {
               onChange={e => setFormData({...formData, role: e.target.value as any})}
               options={[
                 { value: 'Admin', label: 'Admin' },
-                { value: 'Editor', label: 'Editor' },
-                { value: 'Viewer', label: 'Viewer' }
+                { value: 'Mapping Admin', label: 'Mapping Admin' },
+                { value: 'Mapping User', label: 'Mapping User' }
               ]}
             />
             <Select 

@@ -64,6 +64,7 @@ function App() {
       currentView={currentView} 
       onNavigate={setCurrentView}
       onLogout={handleLogout}
+      user={currentUser}
     >
       {renderView()}
     </Layout>

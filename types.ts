@@ -61,12 +61,14 @@ export interface ADPMakeMapping {
   updatedAt: string;
 }
 
+export type UserRole = 'Admin' | 'Mapping Admin' | 'Mapping User';
+
 export interface User {
   id: string;
   name: string;
   email: string;
   password?: string;
-  role: 'Admin' | 'Editor' | 'Viewer';
+  role: UserRole;
   status: 'Active' | 'Inactive';
   lastActive: string;
 }
