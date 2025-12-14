@@ -17,12 +17,10 @@ import {
   Shapes
 } from 'lucide-react';
 import { Toaster } from 'sonner';
-import { NavItem, ViewState, User } from '../types';
+import { NavItem, User } from '../types';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 interface LayoutProps {
-  children: React.ReactNode;
-  currentView: ViewState;
-  onNavigate: (view: ViewState, params?: any) => void;
   onLogout?: () => void;
   user: User | null;
 }
@@ -32,6 +30,7 @@ interface NavGroup {
   items: NavItem[];
 }
 
+// Map IDs to Routes
 const ALL_NAV_GROUPS: NavGroup[] = [
   {
     title: "Vehicle Management",
@@ -62,37 +61,39 @@ const ALL_NAV_GROUPS: NavGroup[] = [
   }
 ];
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentView, onNavigate, onLogout, user }) => {
+export const Layout: React.FC<LayoutProps> = ({ onLogout, user }) => {
   const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   // Filter Navigation based on Roles
   const navGroups = useMemo(() => {
     if (!user) return [];
 
+    // Normalize role to handle API case differences (e.g. "ADMIN" vs "Admin")
+    const normalizedRole = (user.role || '').toString().toUpperCase().replace('_', ' ');
+
     return ALL_NAV_GROUPS.map(group => {
-      // Filter items inside the group
       const filteredItems = group.items.filter(item => {
         
         // 1. Admin: Access Everything
-        if (user.role === 'Admin') return true;
+        if (normalizedRole === 'ADMIN') return true;
 
-        // 2. Mapping Admin: Access ADP + Vehicle Management
-        if (user.role === 'Mapping Admin') {
-          // Allow Vehicle Management Group + ADP Group
+        // 2. Mapping Admin
+        if (normalizedRole === 'MAPPING ADMIN') {
           const allowedIds = [
-            'dashboard', 'makes', 'models', 'types', // Vehicle Mgmt
-            'adp-master', 'adp-makes', 'adp-types', 'adp-mapping', 'mapping-review' // ADP
+            'dashboard', 'makes', 'models', 'types',
+            'adp-master', 'adp-makes', 'adp-types', 'adp-mapping', 'mapping-review'
           ];
           return allowedIds.includes(item.id);
         }
 
-        // 3. Mapping User: Access ADP Only (No Review)
-        if (user.role === 'Mapping User') {
+        // 3. Mapping User
+        if (normalizedRole === 'MAPPING USER') {
            const allowedIds = [
-             'dashboard', // Usually good to give them dashboard read-only
+             'dashboard',
              'adp-master', 'adp-makes', 'adp-types', 'adp-mapping'
            ];
-           // Explicitly EXCLUDE mapping-review
            return allowedIds.includes(item.id);
         }
 
@@ -100,13 +101,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onNavigat
       });
 
       return { ...group, items: filteredItems };
-    }).filter(group => group.items.length > 0); // Only return groups that have items
+    }).filter(group => group.items.length > 0);
   }, [user]);
 
-  // Helper to find label for header
+  // Determine active view based on path
+  const currentPath = location.pathname.substring(1) || 'dashboard';
+
   const getCurrentLabel = () => {
     for (const group of ALL_NAV_GROUPS) {
-      const found = group.items.find(i => i.id === currentView);
+      // Simple matching: item.id matches start of path
+      const found = group.items.find(i => currentPath.startsWith(i.id));
       if (found) return found.label;
     }
     return 'Dashboard';
@@ -115,6 +119,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onNavigat
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       <Toaster position="top-right" richColors closeButton />
+      
       {/* Sidebar */}
       <aside 
         className={`${sidebarOpen ? 'w-64' : 'w-20'} 
@@ -142,11 +147,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onNavigat
               <div className="space-y-1">
                 {group.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = currentView === item.id;
+                  const isActive = currentPath.startsWith(item.id);
                   return (
                     <button
                       key={item.id}
-                      onClick={() => onNavigate(item.id)}
+                      onClick={() => navigate(`/${item.id}`)}
                       className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 group
                         ${isActive 
                           ? 'bg-slash-red text-white shadow-lg shadow-rose-900/20' 
@@ -210,7 +215,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onNavigat
         {/* Scrollable View Area */}
         <main className="flex-1 overflow-auto p-8">
           <div className="max-w-7xl mx-auto animate-in fade-in duration-500 slide-in-from-bottom-4">
-            {children}
+             <Outlet />
           </div>
         </main>
       </div>

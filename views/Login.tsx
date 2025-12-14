@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
-import { User } from '../types';
 import { AuthService } from '../services/authService';
 import { Button, Input } from '../components/UI';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
-interface LoginViewProps {
-  onLogin: (user: User) => void;
-}
-
-export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
+export const LoginView: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,11 +22,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
         throw new Error("Received empty user data");
       }
 
-      onLogin(user);
-      
       // Explicitly check properties before accessing
       const welcomeName = (user && user.fullName) ? user.fullName : 'User';
       toast.success(`Welcome back, ${welcomeName}`);
+      
+      navigate('/dashboard');
     } catch (error: any) {
       console.error("Login Error", error);
       toast.error(error.message || "Invalid credentials or server error.");

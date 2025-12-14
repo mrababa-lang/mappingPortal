@@ -1,17 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDashboardStats, useTrendStats, useActivityLog } from '../hooks/useADPData';
 import { Card } from '../components/UI';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from 'recharts';
 import { Car, Tags, Settings2, TrendingUp, CheckCircle2, AlertTriangle, FileWarning, Activity, Languages, Loader2, Filter } from 'lucide-react';
-import { ViewState } from '../types';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
-interface DashboardProps {
-  onNavigate?: (view: ViewState, params?: any) => void;
-}
+export const Dashboard: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  
+  // Sync state with URL
+  const dateFrom = searchParams.get('dateFrom') || '';
+  const dateTo = searchParams.get('dateTo') || '';
 
-export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const setDateFrom = (val: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    if(val) newParams.set('dateFrom', val); else newParams.delete('dateFrom');
+    setSearchParams(newParams);
+  }
+
+  const setDateTo = (val: string) => {
+    const newParams = new URLSearchParams(searchParams);
+    if(val) newParams.set('dateTo', val); else newParams.delete('dateTo');
+    setSearchParams(newParams);
+  }
 
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: trendData } = useTrendStats(dateFrom, dateTo);
@@ -36,9 +48,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
   ];
 
   const handleBarClick = (data: any) => {
-    if (onNavigate && data && data.activePayload && data.activePayload.length > 0) {
+    if (data && data.activePayload && data.activePayload.length > 0) {
        const payload = data.activePayload[0].payload;
-       onNavigate('adp-mapping', { statusFilter: payload.filter });
+       // Navigate to Mapping view with pre-filled filters
+       navigate(`/adp-mapping?statusFilter=${payload.filter}`);
     }
   };
 

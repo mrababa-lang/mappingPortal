@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useADPMappings, useUpsertMapping } from '../hooks/useADPData';
 import { useMakes, useModels } from '../hooks/useVehicleData';
 import { ADPMapping, ADPMaster } from '../types';
@@ -6,18 +7,26 @@ import { Card, Button, Select, Modal, TableHeader, TableHead, TableRow, TableCel
 import { Edit2, Filter, Download, CheckCircle2, AlertTriangle, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const ADPMappingView: React.FC<{ initialParams?: any }> = ({ initialParams }) => {
+export const ADPMappingView: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({
-      statusFilter: initialParams?.statusFilter || 'all',
-      dateFrom: initialParams?.dateFrom || '',
-      dateTo: initialParams?.dateTo || '',
-      q: ''
-  });
   
+  // Sync state with URL params
+  const statusFilter = searchParams.get('statusFilter') || 'all';
+  const dateFrom = searchParams.get('dateFrom') || '';
+  const dateTo = searchParams.get('dateTo') || '';
+  const q = searchParams.get('q') || '';
+
+  const updateParam = (key: string, value: string) => {
+      const newParams = new URLSearchParams(searchParams);
+      if(value && value !== 'all') newParams.set(key, value); else newParams.delete(key);
+      setSearchParams(newParams);
+      setPage(1); // Reset page on filter change
+  };
+
   const { data, isLoading } = useADPMappings({ 
       page, size: 20, 
-      ...filters 
+      statusFilter, dateFrom, dateTo, q
   });
   
   const { data: makes = [] } = useMakes();
@@ -30,9 +39,6 @@ export const ADPMappingView: React.FC<{ initialParams?: any }> = ({ initialParam
   const [mappingState, setMappingState] = useState({ status: 'MAPPED', makeId: '', modelId: '' });
 
   const handleOpenModal = (item: any) => {
-      // item here is the composite object from backend which might include mapping info
-      // Assuming backend returns a flat DTO or we extract it. 
-      // For this implementation, we assume `item` contains adp master fields + mapping fields
       setSelectedItem(item);
       setMappingState({
           status: item.status || 'MAPPED',
@@ -70,9 +76,18 @@ export const ADPMappingView: React.FC<{ initialParams?: any }> = ({ initialParam
       <div className="flex justify-between items-end">
          <h1 className="text-2xl font-bold">ADP Mapping</h1>
          <div className="flex gap-2">
-             <Select label="" value={filters.statusFilter} onChange={e => setFilters({...filters, statusFilter: e.target.value})} 
-                options={[{value: 'all', label: 'All'}, {value: 'mapped', label: 'Mapped'}, {value: 'unmapped', label: 'Unmapped'}]} />
-             <Input label="" type="date" value={filters.dateFrom} onChange={e => setFilters({...filters, dateFrom: e.target.value})} />
+             <Select 
+                label="" 
+                value={statusFilter} 
+                onChange={e => updateParam('statusFilter', e.target.value)} 
+                options={[{value: 'all', label: 'All'}, {value: 'mapped', label: 'Mapped'}, {value: 'unmapped', label: 'Unmapped'}]} 
+             />
+             <Input 
+                label="" 
+                type="date" 
+                value={dateFrom} 
+                onChange={e => updateParam('dateFrom', e.target.value)} 
+             />
          </div>
       </div>
 

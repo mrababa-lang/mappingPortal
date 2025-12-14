@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { LoginView } from './views/Login';
 import { Dashboard } from './views/Dashboard';
@@ -13,76 +14,70 @@ import { MappingReviewView } from './views/MappingReview';
 import { UsersView } from './views/Users';
 import { TrackingView } from './views/Tracking';
 import { ConfigurationView } from './views/Configuration';
-import { ViewState, User } from './types';
+import { AuthService } from './services/authService';
+import { User } from './types';
+import { Loader2 } from 'lucide-react';
 
-function App() {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<ViewState>('dashboard');
-  const [viewParams, setViewParams] = useState<any>(null);
-
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-    setCurrentView('dashboard');
-    setViewParams(null);
-  };
+// Wrapper to provide User context to Layout
+const LayoutWrapper = () => {
+  const [user, setUser] = useState<User | null>(AuthService.getCurrentUser());
 
   const handleLogout = () => {
-    setCurrentUser(null);
-    setCurrentView('login');
-    setViewParams(null);
+    AuthService.logout();
+    setUser(null);
+    window.location.href = '/login';
   };
 
-  const handleNavigate = (view: ViewState, params?: any) => {
-    setCurrentView(view);
-    setViewParams(params || null);
-  };
-
-  // If not logged in, show login page
-  if (!currentUser) {
-    return <LoginView onLogin={handleLogin} />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
-  const renderView = () => {
-    switch (currentView) {
-      case 'dashboard':
-        return <Dashboard onNavigate={handleNavigate} />;
-      case 'makes':
-        return <MakesView />;
-      case 'models':
-        return <ModelsView />;
-      case 'types':
-        return <TypesView />;
-      case 'adp-master':
-        return <ADPMasterView />;
-      case 'adp-makes':
-        return <ADPMakesView />;
-      case 'adp-types':
-        return <ADPVehicleTypesView />;
-      case 'adp-mapping':
-        return <ADPMappingView initialParams={viewParams} />;
-      case 'mapping-review':
-        return <MappingReviewView />;
-      case 'users':
-        return <UsersView />;
-      case 'tracking':
-        return <TrackingView />;
-      case 'configuration':
-        return <ConfigurationView />;
-      default:
-        return <Dashboard onNavigate={handleNavigate} />;
-    }
-  };
-
   return (
-    <Layout 
-      currentView={currentView} 
-      onNavigate={handleNavigate}
-      onLogout={handleLogout}
-      user={currentUser}
-    >
-      {renderView()}
-    </Layout>
+    <Layout user={user} onLogout={handleLogout} />
   );
+};
+
+// Protected Route Guard
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const user = AuthService.getCurrentUser();
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+};
+
+const router = createBrowserRouter([
+  {
+    path: "/login",
+    element: <LoginView />,
+  },
+  {
+    path: "/",
+    element: <ProtectedRoute><LayoutWrapper /></ProtectedRoute>,
+    children: [
+       { index: true, element: <Navigate to="/dashboard" replace /> },
+       { path: "dashboard", element: <Dashboard /> },
+       { path: "makes", element: <MakesView /> },
+       { path: "models", element: <ModelsView /> },
+       { path: "types", element: <TypesView /> },
+       { path: "adp-master", element: <ADPMasterView /> },
+       { path: "adp-makes", element: <ADPMakesView /> },
+       { path: "adp-types", element: <ADPVehicleTypesView /> },
+       { path: "adp-mapping", element: <ADPMappingView /> },
+       { path: "mapping-review", element: <MappingReviewView /> },
+       { path: "users", element: <UsersView /> },
+       { path: "tracking", element: <TrackingView /> },
+       { path: "configuration", element: <ConfigurationView /> },
+    ]
+  },
+  {
+    path: "*",
+    element: <Navigate to="/" replace />
+  }
+]);
+
+function App() {
+  return <RouterProvider router={router} />;
 }
 
 export default App;
