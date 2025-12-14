@@ -64,9 +64,8 @@ export const useBulkImportMakes = () => {
     mutationFn: async (file: File) => {
        const formData = new FormData();
        formData.append('file', file);
-       await api.post('/makes/bulk', formData, {
-         headers: { 'Content-Type': 'multipart/form-data' }
-       });
+       // Let Axios/Browser set the Content-Type with boundary
+       await api.post('/makes/bulk', formData);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['makes'] }),
   });
@@ -122,9 +121,8 @@ export const useBulkImportModels = () => {
       mutationFn: async (file: File) => {
          const formData = new FormData();
          formData.append('file', file);
-         await api.post('/models/bulk', formData, {
-           headers: { 'Content-Type': 'multipart/form-data' }
-         });
+         // Let Axios/Browser set the Content-Type with boundary
+         await api.post('/models/bulk', formData);
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
     });
@@ -180,9 +178,8 @@ export const useBulkImportTypes = () => {
       mutationFn: async (file: File) => {
          const formData = new FormData();
          formData.append('file', file);
-         await api.post('/types/bulk', formData, {
-           headers: { 'Content-Type': 'multipart/form-data' }
-         });
+         // Let Axios/Browser set the Content-Type with boundary
+         await api.post('/types/bulk', formData);
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
     });

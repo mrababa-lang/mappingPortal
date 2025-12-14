@@ -95,9 +95,8 @@ export const useBulkImportADPMaster = () => {
       mutationFn: async (file: File) => {
          const formData = new FormData();
          formData.append('file', file);
-         await api.post('/adp/master/upload', formData, {
-           headers: { 'Content-Type': 'multipart/form-data' }
-         });
+         // Let Axios/Browser set the Content-Type with boundary
+         await api.post('/adp/master/upload', formData);
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adpMaster'] }),
     });
