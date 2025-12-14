@@ -63,10 +63,9 @@ export const useBulkImportMakes = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (file: File) => {
-       // Send raw CSV text as the backend does not support multipart/form-data
        const content = await file.text();
        await api.post('/makes/bulk', content, {
-          headers: { 'Content-Type': 'text/csv' }
+          headers: { 'Content-Type': 'application/json' }
        });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['makes'] }),
@@ -124,7 +123,7 @@ export const useBulkImportModels = () => {
       mutationFn: async (file: File) => {
          const content = await file.text();
          await api.post('/models/bulk', content, {
-            headers: { 'Content-Type': 'text/csv' }
+            headers: { 'Content-Type': 'application/json' }
          });
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
@@ -182,7 +181,7 @@ export const useBulkImportTypes = () => {
       mutationFn: async (file: File) => {
          const content = await file.text();
          await api.post('/types/bulk', content, {
-             headers: { 'Content-Type': 'text/csv' }
+             headers: { 'Content-Type': 'application/json' }
          });
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['types'] }),

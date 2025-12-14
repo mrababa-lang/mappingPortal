@@ -95,7 +95,7 @@ export const useBulkImportADPMaster = () => {
       mutationFn: async (file: File) => {
          const content = await file.text();
          await api.post('/adp/master/upload', content, {
-             headers: { 'Content-Type': 'text/csv' }
+             headers: { 'Content-Type': 'application/json' }
          });
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adpMaster'] }),
