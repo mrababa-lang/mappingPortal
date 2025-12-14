@@ -1,72 +1,102 @@
-# SlashData Vehicle Portal - Enhancement & Fixes Log
+# SlashData Vehicle Portal - Enhancement & Roadmap
 
-This document outlines the roadmap to transition the application from the current "Mock/Prototype" state to a robust "Production" system backed by Java Spring Boot and MySQL.
+This document outlines the roadmap to transition the application from the current "Mock/Prototype" state to a robust "Production" system.
 
 **Status Key:**
 [X] = Implemented
 [ ] = Pending
 
 ================================================================================
-SECTION 1: BACKEND MIGRATION (Priority High)
+CATEGORY 1: FRONTEND & TECHNICAL ARCHITECTURE
+(Focus: Code quality, Performance, Libraries, Security)
 ================================================================================
 
-## 1. Architecture & Routing
+## 1. Routing & Navigation
 - [ ] **React Router Integration**: 
   - Replace state-based `currentView` in `App.tsx` with `react-router-dom`.
-  - Implement Protected Routes for authentication checks.
-  - Enable deep linking (e.g., directly navigating to `/adp/mapping`).
+  - Implement `loader` functions for route-based data fetching.
+  - Enable URL deep linking (e.g., `/adp/mapping?status=MISSING_MODEL&dateFrom=2023-01-01`).
+  - Implement Protected Routes wrapper for authentication checks.
 
-## 2. API Service Layer
-- [ ] **Replace StorageService**:
-  - Create `services/api.ts` using `axios`.
-  - Replace local `localStorage` CRUD operations with REST API calls.
-  - Implement Request/Response interceptors for JWT injection and global error handling.
-- [ ] **ID Management**:
-  - Transition from Frontend UUIDs (String) to Backend Auto-Increment IDs (Long/BigInt) for Makes, Models, and Users.
+## 2. API & Data Layer
+- [ ] **Service Layer Refactor**:
+  - Deprecate `storageService.ts` (LocalStorage).
+  - Create `services/api.ts` using `axios` instance with interceptors.
+  - Handle JWT token injection and 401 (Unauthorized) refresh flows.
+- [ ] **TanStack Query Expansion**:
+  - Refactor Dashboard, ADP Master, and Mapping views to use `useQuery` hooks instead of direct service calls.
+  - Implement `useMutation` for ADP Mapping actions (Approve/Reject) with Optimistic UI updates.
 
-## 3. Security & AI
-- [ ] **Server-Side AI Proxy**:
-  - Move `geminiService.ts` logic to the backend to protect the API Key.
-  - Frontend should call `POST /api/ai/suggest` instead of contacting Google directly.
-- [ ] **Authentication**:
-  - Replace mock login in `views/Login.tsx` with real JWT authentication (`POST /api/auth/login`).
+## 3. Security & AI Proxy
+- [ ] **Server-Side AI Integration**:
+  - Remove `GEMINI_API_KEY` from frontend code/env.
+  - Refactor `geminiService.ts` to call backend endpoints (`/api/ai/suggest`).
+- [ ] **Authentication Flow**:
+  - Replace mock login with real Auth Provider context.
+  - Implement session timeout handling.
 
-================================================================================
-SECTION 2: REMAINING FRONTEND ENHANCEMENTS
-================================================================================
-
-## 1. Dashboard Enhancements (New)
-- [ ] **Interactive Drill-Down**: 
-  - Clicking on chart bars (e.g., "Missing Model") should navigate to the ADP Mapping view with that filter active.
-- [ ] **Recent Activity Widget**:
-  - Display the last 5-10 actions (User X mapped Y) directly on the dashboard sidebar or bottom panel.
-- [ ] **Mapping Trend Chart**:
-  - Add a line chart showing "Mappings Completed" over the last 30 days.
-- [ ] **Date Range Filtering**:
-  - Add global date filter to Dashboard to view stats for specific periods.
-
-## 2. State Management (TanStack Query)
-- [X] **Vehicle Data Hooks**: Implemented in `useVehicleData.ts`.
-- [ ] **ADP Data Hooks**: 
-  - Create `useADPMaster`, `useADPMappings`, `useADPMakeMappings`.
-  - Implement optimistic updates for mapping actions (Approve/Reject).
-- [ ] **User & Tracking Hooks**: 
-  - Create `useUsers` and `useActivityStats`.
-
-## 3. Data Handling
-- [X] **Virtualization**: Implemented in `ADPMasterView` for large datasets.
-- [ ] **Server-Side CSV Import**:
-  - Update Bulk Import modals to stream files to backend `POST /api/{resource}/upload` endpoints instead of client-side parsing.
-
-## 4. Quality Assurance
-- [ ] **Error Boundaries**: Wrap main views to catch React rendering errors.
-- [ ] **Unit Testing**: Add tests for critical logic (Mapping suggestions, Data transformation).
+## 4. Code Quality & Testing
+- [ ] **Error Boundaries**: Wrap main views to catch React rendering errors gracefully.
+- [ ] **Unit Testing**: Add Vitest for utility functions and hooks.
+- [ ] **E2E Testing**: Add Playwright tests for critical paths (Login -> Map Vehicle -> Approve).
 
 ================================================================================
-SECTION 3: RECENTLY COMPLETED
+CATEGORY 2: BUSINESS & FUNCTIONAL ENHANCEMENTS
+(Focus: User Features, Business Logic, Workflows)
 ================================================================================
-- [X] **Form Validation**: Refactored `Makes.tsx`, `Types.tsx`, and `Users.tsx` to use Zod & React Hook Form.
-- [X] **Models Validation**: Implemented Zod & React Hook Form for Models.
-- [X] **React Version Fix**: Resolved React 18 vs 19 conflict.
-- [X] **Virtualization**: Implemented in `ADPMasterView`.
-- [X] **Global Make Mapping**: Implemented in `ADPMakesView`.
+
+## 1. Dashboard & Analytics
+- [X] **Interactive Drill-Down**: Clicking chart bars navigates to ADP Mapping view with active filters.
+- [X] **Recent Activity Widget**: Sidebar widget showing real-time feed of mapping actions.
+- [X] **Mapping Trend Chart**: Line chart visualizing productivity over time.
+- [X] **Global Date Filtering**: Date range inputs affecting all dashboard metrics.
+
+## 2. Data Management Workflows
+- [ ] **Server-Side Bulk Import**:
+  - Change "Bulk Import" to upload files to backend (`POST /api/upload`) for async processing (RabbitMQ/Kafka) instead of client-side parsing.
+  - Add a "Job Status" notification center for long-running uploads.
+- [ ] **Advanced Mapping Logic**:
+  - Implement "Ignore Rule": Allow users to permanently ignore specific ADP patterns.
+  - Implement "Auto-Map Confidence": Display AI confidence score (High/Medium/Low) next to suggestions.
+
+## 3. Reporting & Export
+- [ ] **Advanced Exporting**:
+  - Allow exporting "Filtered Results" vs "All Data".
+  - Support Excel (.xlsx) format in addition to CSV.
+  - Generate PDF reports for "Monthly Mapping Summary".
+
+## 4. User Administration
+- [X] **Form Validation**: Strict validation for User creation (Zod/RHF).
+- [ ] **Granular Permissions**: 
+  - Separate "Approve" permission from "Edit" permission.
+  - Add "Read-Only" role for Auditors.
+
+================================================================================
+SECTION 3: RECENTLY COMPLETED LOG
+================================================================================
+- [X] **Dashboard UI**: Implemented Trend Charts, Activity Feed, and Date Filters.
+- [X] **Drill-Down Logic**: Implemented state-based parameter passing between Dashboard and Mapping views.
+- [X] **Form Handling**: Refactored Makes, Types, Users, and Models to use Zod & React Hook Form.
+- [X] **Virtualization**: Implemented in `ADPMasterView` for high-performance rendering of large lists.
+- [X] **Global Make Mapping**: Implemented in `ADPMakesView` to handle bulk mapping by Manufacturer.
+
+================================================================================
+SECTION 4: GOOD TO HAVE FEATURES (Future Scope)
+================================================================================
+
+## 1. Visual Verification & Tools
+- [ ] **Vehicle Image Gallery**: Auto-fetch or upload reference images for SD Models to assist mappers in visual verification.
+- [ ] **VIN Decoding Utility**: A built-in tool to test specific VINs against the mapped logic to verify accuracy.
+- [ ] **Diff Viewer**: Visual side-by-side comparison (Before vs After) in the Audit History and Review screens.
+
+## 2. Notification & Collaboration
+- [ ] **In-App Notifications**: Real-time alerts for "New Import Completed", "Mapping Rejected", or "Pending Reviews".
+- [ ] **Mapping Comments**: Allow users to leave comments/notes on specific mapping decisions for future reference.
+
+## 3. Data Quality & Localization
+- [X] **Completeness Score**: Dashboard widget showing % of Arabic translations missing or descriptions missing.
+- [ ] **Region Tags**: Ability to tag models as "GCC Spec", "US Spec", etc., to handle regional naming variations.
+
+## 4. UI/UX Improvements
+- [ ] **Dark Mode**: Toggle for low-light working environments.
+- [ ] **Keyboard Shortcuts**: Hotkeys for rapid approval/rejection (e.g., 'A' to Approve, 'R' to Reject) in Review Mode.

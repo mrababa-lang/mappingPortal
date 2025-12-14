@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { DataService } from '../services/storageService';
 import { Card, Input } from '../components/UI';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from 'recharts';
-import { Car, Tags, Settings2, TrendingUp, CheckCircle2, AlertTriangle, HelpCircle, AlertCircle, Calendar, Filter, Activity } from 'lucide-react';
+import { Car, Tags, Settings2, TrendingUp, CheckCircle2, AlertTriangle, HelpCircle, AlertCircle, Calendar, Filter, Activity, Languages, FileWarning } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface DashboardProps {
@@ -36,20 +36,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     });
   }, [allMappings, dateFrom, dateTo]);
 
-  // ADP Statistics Calculation (KPIs)
-  // For total/unmapped, logic depends if we only want to show stats for *activity* in range or status state.
-  // Standard dashboard usually shows current state. Date filter applies mostly to activity/trends.
-  // However, let's make the charts reflect the filter.
-  // Unmapped count is absolute unless we interpret "Unmapped in range" which doesn't make sense.
-  // We will keep absolute stats for top cards (Entity Counts) and filtered stats for Mapping Progress.
-  
+  // --- Data Quality / Completeness Calculations ---
+  const makesMissingAr = makes.filter(m => !m.nameAr || m.nameAr.trim() === '').length;
+  const modelsMissingAr = models.filter(m => !m.nameAr || m.nameAr.trim() === '').length;
+  const typesMissingAr = types.filter(t => !t.nameAr || t.nameAr.trim() === '').length;
+  const typesMissingDesc = types.filter(t => !t.description || t.description.trim() === '').length;
+
+  const totalLocItems = makes.length + models.length + types.length;
+  const totalMissingLoc = makesMissingAr + modelsMissingAr + typesMissingAr;
+  const locScore = totalLocItems === 0 ? 100 : Math.round(((totalLocItems - totalMissingLoc) / totalLocItems) * 100);
+
+  // --- ADP Statistics ---
   const mappedCount = filteredMappings.filter(m => !m.status || m.status === 'MAPPED').length;
   const missingMakeCount = filteredMappings.filter(m => m.status === 'MISSING_MAKE').length;
   const missingModelCount = filteredMappings.filter(m => m.status === 'MISSING_MODEL').length;
-  // Note: Unmapped count is tricky with date filter. We'll show absolute unmapped count if no filter, otherwise N/A or just ignore date for unmapped.
-  // Let's stick to absolute counts for the Bar Chart to represent *Current System State*, 
-  // but if a user filters by date, they probably want to see *what happened* in that period.
-  // A mixed approach: Top KPIs are static (System Totals). Charts/Activity are filtered.
   
   const absoluteMappedCount = allMappings.filter(m => !m.status || m.status === 'MAPPED').length;
   const unmappedCount = Math.max(0, adpMaster.length - allMappings.length);
@@ -61,7 +61,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     { name: 'No Make', count: missingMakeCount, color: '#EF4444', filter: 'issues' },   // Red
   ];
 
-  // Trend Chart Data (Last 30 Days or Range)
+  // Trend Chart Data
   const trendData = useMemo(() => {
     const data: { date: string; count: number }[] = [];
     const map = new Map<string, number>();
@@ -73,7 +73,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
       }
     });
 
-    // Fill last 30 days if no range, or range days
     const end = dateTo ? new Date(dateTo) : new Date();
     const start = dateFrom ? new Date(dateFrom) : new Date(end.getTime() - 30 * 24 * 60 * 60 * 1000);
     
@@ -96,7 +95,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
        const payload = data.activePayload[0].payload;
        onNavigate('adp-mapping', { 
          statusFilter: payload.filter,
-         dateFrom: dateFrom, // carry over date context
+         dateFrom: dateFrom,
          dateTo: dateTo
        });
     }
@@ -211,10 +210,65 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
            </Card>
         </div>
 
-        {/* Right Column: Recent Activity */}
+        {/* Right Column: Recent Activity & Data Quality */}
         <div className="space-y-6">
+           
+           {/* Data Quality Widget (New) */}
+           <Card className="p-5 border border-slate-200/60 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                 <h3 className="text-md font-bold text-slate-800 flex items-center gap-2">
+                   <Languages size={18} className="text-emerald-600" />
+                   Data Quality
+                 </h3>
+                 <span className={`text-xl font-bold ${locScore < 80 ? 'text-amber-500' : 'text-emerald-600'}`}>
+                   {locScore}%
+                 </span>
+              </div>
+              <div className="space-y-3">
+                 <div>
+                    <div className="flex justify-between text-xs mb-1.5">
+                      <span className="text-slate-600 font-medium">Localization Completeness</span>
+                      <span className="text-slate-400">{totalLocItems - totalMissingLoc}/{totalLocItems}</span>
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-1.5">
+                      <div 
+                        className={`h-1.5 rounded-full transition-all duration-1000 ${locScore < 100 ? 'bg-amber-400' : 'bg-emerald-500'}`} 
+                        style={{ width: `${locScore}%` }}
+                      ></div>
+                    </div>
+                 </div>
+
+                 <div className="space-y-2 pt-2">
+                    {makesMissingAr > 0 && (
+                      <div className="flex items-center gap-2 text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-100">
+                        <AlertCircle size={12} className="shrink-0" />
+                        <span><strong>{makesMissingAr}</strong> Makes missing Arabic name</span>
+                      </div>
+                    )}
+                    {modelsMissingAr > 0 && (
+                      <div className="flex items-center gap-2 text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-100">
+                        <AlertCircle size={12} className="shrink-0" />
+                        <span><strong>{modelsMissingAr}</strong> Models missing Arabic name</span>
+                      </div>
+                    )}
+                     {typesMissingDesc > 0 && (
+                      <div className="flex items-center gap-2 text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100">
+                        <FileWarning size={12} className="shrink-0" />
+                        <span><strong>{typesMissingDesc}</strong> Types missing description</span>
+                      </div>
+                    )}
+                    {totalMissingLoc === 0 && typesMissingDesc === 0 && (
+                       <div className="flex items-center gap-2 text-[11px] text-emerald-700 bg-emerald-50 p-2 rounded border border-emerald-100">
+                          <CheckCircle2 size={12} className="shrink-0" />
+                          <span>All translations complete!</span>
+                       </div>
+                    )}
+                 </div>
+              </div>
+           </Card>
+
            {/* Coverage Widget */}
-           <Card className="p-6 bg-gradient-to-br from-indigo-600 to-purple-700 text-white">
+           <Card className="p-6 bg-gradient-to-br from-indigo-600 to-purple-700 text-white shadow-lg shadow-indigo-500/20">
                <h3 className="text-lg font-bold mb-2">ADP Coverage</h3>
                <div className="flex items-end gap-2 mb-2">
                  <span className="text-4xl font-bold">{adpMaster.length > 0 ? ((absoluteMappedCount / adpMaster.length) * 100).toFixed(1) : 0}%</span>
@@ -232,7 +286,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
            </Card>
 
            {/* Activity Feed */}
-           <Card className="flex-1 overflow-hidden flex flex-col h-[650px]">
+           <Card className="flex-1 overflow-hidden flex flex-col h-[500px]">
              <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   <Activity size={18} className="text-indigo-500" />
