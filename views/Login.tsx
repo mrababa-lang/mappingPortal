@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { User } from '../types';
 import { DataService } from '../services/storageService';
 import { Button, Input } from '../components/UI';
-import { ArrowRight, Lock, Mail } from 'lucide-react';
+import { ArrowRight, Lock, Mail, RefreshCw } from 'lucide-react';
 
 interface LoginViewProps {
   onLogin: (user: User) => void;
@@ -40,6 +40,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       }
       setIsLoading(false);
     }, 800);
+  };
+
+  const handleResetData = () => {
+    if (window.confirm('This will reset all data (Users, Makes, Mappings) to the default state. Continue?')) {
+      localStorage.clear();
+      window.location.reload();
+    }
   };
 
   return (
@@ -95,10 +102,21 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
             Sign In <ArrowRight size={18} />
           </Button>
 
-          <p className="text-center text-xs text-slate-400 mt-4">
-            Protected by enterprise-grade security. <br/>
-            Contact IT for access.
-          </p>
+          <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-3">
+             <p className="text-center text-xs text-slate-400">
+                Protected by enterprise-grade security. <br/>
+                Contact IT for access.
+             </p>
+             
+             <button 
+               type="button"
+               onClick={handleResetData}
+               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors mt-2"
+               title="Clear local storage and reset to defaults"
+             >
+               <RefreshCw size={12} /> Reset Demo Data
+             </button>
+          </div>
         </form>
       </div>
     </div>
