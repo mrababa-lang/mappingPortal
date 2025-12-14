@@ -84,6 +84,7 @@ export interface User {
 
 export interface AppConfig {
   enableAI: boolean;
+  apiKey?: string; // Optional user-configured API Key
   aiConfidenceThreshold: number; // 0-100
   maintenanceMode: boolean;
   enableAuditLog: boolean;

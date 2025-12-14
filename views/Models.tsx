@@ -3,7 +3,7 @@ import { DataService } from '../services/storageService';
 import { suggestModels } from '../services/geminiService';
 import { Model, Make, VehicleType } from '../types';
 import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Sparkles, Upload, FileText, Search, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, Upload, FileText, Search, AlertCircle, AlertTriangle, Filter, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -31,6 +31,8 @@ export const ModelsView: React.FC = () => {
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('');
+  
   const ITEMS_PER_PAGE = 20;
 
   // Delete Modal State
@@ -62,7 +64,7 @@ export const ModelsView: React.FC = () => {
   // Reset page on search
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, selectedTypeFilter]);
 
   const refreshData = () => {
     setModels(DataService.getModels());
@@ -227,10 +229,16 @@ export const ModelsView: React.FC = () => {
     const makeName = make ? make.name.toLowerCase() : '';
     const query = searchQuery.toLowerCase();
     
-    return model.name.toLowerCase().includes(query) ||
+    // Search Filter
+    const matchesSearch = model.name.toLowerCase().includes(query) ||
            (model.nameAr && model.nameAr.includes(searchQuery)) ||
            model.id.toLowerCase().includes(query) ||
            makeName.includes(query);
+
+    // Type Filter
+    const matchesType = selectedTypeFilter ? model.typeId === selectedTypeFilter : true;
+    
+    return matchesSearch && matchesType;
   });
 
   // Pagination Logic
@@ -256,15 +264,44 @@ export const ModelsView: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-sm relative">
-        <Search className="absolute top-3 left-3 text-slate-400" size={18} />
-        <Input 
-          label="" 
-          placeholder="Search by model, make or ID..." 
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
+      <div className="flex flex-col sm:flex-row gap-4 items-end">
+        <div className="max-w-md w-full relative">
+          <Search className="absolute top-3 left-3 text-slate-400" size={18} />
+          <Input 
+            label="" 
+            placeholder="Search by model, make or ID..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="w-full sm:w-64">
+           <div className="relative">
+              <Select 
+                label=""
+                value={selectedTypeFilter}
+                onChange={(e) => setSelectedTypeFilter(e.target.value)}
+                options={[
+                  { value: '', label: 'All Vehicle Types' },
+                  ...types.map(t => ({ value: t.id, label: t.name }))
+                ]}
+                className="py-2.5"
+              />
+              <div className="absolute inset-y-0 right-8 flex items-center pointer-events-none text-slate-400">
+                <Filter size={16} />
+              </div>
+           </div>
+        </div>
+        {selectedTypeFilter && (
+          <Button 
+            variant="ghost" 
+            className="mb-0.5 px-2 text-slate-400 hover:text-red-500" 
+            onClick={() => setSelectedTypeFilter('')}
+            title="Clear Type Filter"
+          >
+            <X size={18} />
+          </Button>
+        )}
       </div>
 
       <Card className="overflow-hidden">

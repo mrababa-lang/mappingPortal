@@ -1,13 +1,20 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { DataService } from './storageService';
 
-// Initialize with empty key if missing to allow app to load, but API calls will fail gracefully
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
-
 const isAIEnabled = () => {
   const config = DataService.getAppConfig();
   return config.enableAI;
+};
+
+const getApiKey = () => {
+  const config = DataService.getAppConfig();
+  // Prioritize User Configured Key, then Environment Variable
+  return config.apiKey || process.env.API_KEY || '';
+};
+
+const getClient = () => {
+  const key = getApiKey();
+  return new GoogleGenAI({ apiKey: key });
 };
 
 export const generateDescription = async (itemName: string, context: string): Promise<string> => {
@@ -15,12 +22,14 @@ export const generateDescription = async (itemName: string, context: string): Pr
     return "AI generation is disabled in configuration.";
   }
   
+  const apiKey = getApiKey();
   if (!apiKey) {
     console.warn("Gemini API Key is missing.");
     return `AI Description unavailable for ${itemName} (Missing API Key).`;
   }
 
   try {
+    const ai = getClient();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: `Write a professional, concise (max 2 sentences) description for a vehicle ${context}: "${itemName}". Do not include quotes.`,
@@ -37,12 +46,14 @@ export const suggestModels = async (makeName: string): Promise<string[]> => {
     return [];
   }
 
+  const apiKey = getApiKey();
   if (!apiKey) {
     console.warn("Gemini API Key is missing.");
     return [];
   }
 
   try {
+    const ai = getClient();
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: `List 3 popular car model names for the manufacturer "${makeName}".`,
@@ -72,6 +83,7 @@ export const suggestMapping = async (adpDescription: string): Promise<{ makeId?:
     return null;
   }
 
+  const apiKey = getApiKey();
   if (!apiKey) {
     console.warn("Gemini API Key is missing.");
     return null;
@@ -87,6 +99,7 @@ export const suggestMapping = async (adpDescription: string): Promise<{ makeId?:
   };
 
   try {
+    const ai = getClient();
     const prompt = `
       You are an expert vehicle data mapper. 
       I have an ADP Vehicle Description: "${adpDescription}".

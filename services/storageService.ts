@@ -25,6 +25,7 @@ const INITIAL_ADP_MAPPING: ADPMapping[] = [
 
 const INITIAL_CONFIG: AppConfig = {
   enableAI: true,
+  apiKey: '',
   aiConfidenceThreshold: 70,
   maintenanceMode: false,
   enableAuditLog: true

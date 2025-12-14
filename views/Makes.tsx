@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Make, VehicleType } from '../types';
-import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination, Select } from '../components/UI';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2, Filter, X } from 'lucide-react';
 import { useMakes, useModels, useTypes, useCreateMake, useUpdateMake, useDeleteMake, useBulkImportMakes } from '../hooks/useVehicleData';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
@@ -36,6 +36,8 @@ export const MakesView: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<string>('');
+  
   const ITEMS_PER_PAGE = 20;
   
   // Bulk State
@@ -52,10 +54,10 @@ export const MakesView: React.FC = () => {
     defaultValues: { name: '', nameAr: '' }
   });
 
-  // Reset page on search
+  // Reset page on search or filter
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, selectedTypeFilter]);
 
   const handleOpenModal = (make?: Make) => {
     if (make) {
@@ -182,10 +184,21 @@ export const MakesView: React.FC = () => {
 
   // Filter Logic
   const filteredMakes = makes.filter(make => {
+    // 1. Search Filter
     const query = searchQuery.toLowerCase();
-    return make.name.toLowerCase().includes(query) ||
+    const matchesSearch = make.name.toLowerCase().includes(query) ||
            (make.nameAr && make.nameAr.includes(searchQuery)) ||
            make.id.toLowerCase().includes(query);
+
+    // 2. Type Filter
+    let matchesType = true;
+    if (selectedTypeFilter) {
+      // Check if any model associated with this make has the selected type
+      const makeModels = models.filter(m => m.makeId === make.id);
+      matchesType = makeModels.some(m => m.typeId === selectedTypeFilter);
+    }
+    
+    return matchesSearch && matchesType;
   });
 
   // Pagination Logic
@@ -219,15 +232,44 @@ export const MakesView: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-sm relative">
-        <Search className="absolute top-3 left-3 text-slate-400" size={18} />
-        <Input 
-          label="" 
-          placeholder="Search by make or ID..." 
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="pl-10"
-        />
+      <div className="flex flex-col sm:flex-row gap-4 items-end">
+        <div className="max-w-md w-full relative">
+          <Search className="absolute top-3 left-3 text-slate-400" size={18} />
+          <Input 
+            label="" 
+            placeholder="Search by make or ID..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="w-full sm:w-64">
+           <div className="relative">
+              <Select 
+                label=""
+                value={selectedTypeFilter}
+                onChange={(e) => setSelectedTypeFilter(e.target.value)}
+                options={[
+                  { value: '', label: 'All Vehicle Types' },
+                  ...types.map(t => ({ value: t.id, label: t.name }))
+                ]}
+                className="py-2.5"
+              />
+              <div className="absolute inset-y-0 right-8 flex items-center pointer-events-none text-slate-400">
+                <Filter size={16} />
+              </div>
+           </div>
+        </div>
+        {selectedTypeFilter && (
+          <Button 
+            variant="ghost" 
+            className="mb-0.5 px-2 text-slate-400 hover:text-red-500" 
+            onClick={() => setSelectedTypeFilter('')}
+            title="Clear Type Filter"
+          >
+            <X size={18} />
+          </Button>
+        )}
       </div>
 
       <Card className="overflow-hidden">
