@@ -26,8 +26,7 @@ export const useUsers = () => {
     queryFn: async () => {
       const { data } = await api.get('/users');
       return normalizeArray(data);
-    },
-    initialData: []
+    }
   });
 };
 
@@ -69,15 +68,7 @@ export const useAppConfig = () => {
         queryFn: async () => {
             const { data } = await api.get('/config');
             return normalizeObject(data);
-        },
-        // Provide reasonable defaults to avoid null checks everywhere before data loads
-        initialData: {
-            enableAI: true,
-            apiKey: '',
-            aiConfidenceThreshold: 70,
-            maintenanceMode: false,
-            enableAuditLog: true
-        } as AppConfig
+        }
     });
 };
 

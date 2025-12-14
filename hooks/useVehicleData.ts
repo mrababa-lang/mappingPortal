@@ -18,8 +18,7 @@ export const useMakes = () => {
     queryFn: async () => {
       const { data } = await api.get<Make[]>('/makes');
       return normalizeArray(data);
-    },
-    initialData: []
+    }
   });
 };
 
@@ -80,8 +79,7 @@ export const useModels = () => {
     queryFn: async () => {
       const { data } = await api.get<Model[]>('/models');
       return normalizeArray(data);
-    },
-    initialData: []
+    }
   });
 };
 
@@ -140,8 +138,7 @@ export const useTypes = () => {
       // Assuming endpoint exists based on spec, though missing in simple Postman list
       const { data } = await api.get<VehicleType[]>('/types');
       return normalizeArray(data);
-    },
-    initialData: []
+    }
   });
 };
 

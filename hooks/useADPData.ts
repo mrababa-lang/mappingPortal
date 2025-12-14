@@ -53,8 +53,7 @@ export const useADPMaster = (params: ADPQueryParams) => {
           totalElements: data.totalElements || (content.length ? content.length : 0),
           totalPages: data.totalPages || 1
       };
-    },
-    initialData: { content: [], totalElements: 0, totalPages: 0 }
+    }
   });
 };
 
@@ -113,8 +112,7 @@ export const useADPHistory = (adpId: string | null) => {
       const { data } = await api.get(`/adp/history/${adpId}`);
       return normalizeArray(data);
     },
-    enabled: !!adpId,
-    initialData: []
+    enabled: !!adpId
   });
 };
 
@@ -155,8 +153,7 @@ export const useADPMappings = (params: ADPMappingQueryParams) => {
           totalElements: data.totalElements || (content.length ? content.length : 0),
           totalPages: data.totalPages || 1
       };
-    },
-    initialData: { content: [], totalElements: 0, totalPages: 0 }
+    }
   });
 };
 
@@ -224,8 +221,7 @@ export const useADPUniqueMakes = (params?: any) => {
                 totalPages: data.totalPages || 1,
                 totalElements: data.totalElements || (content.length ? content.length : 0)
             }
-        },
-        initialData: { content: [], totalElements: 0, totalPages: 0 }
+        }
     })
 }
 
@@ -259,8 +255,7 @@ export const useADPUniqueTypes = (params?: any) => {
                 totalPages: data.totalPages || 1,
                 totalElements: data.totalElements || (content.length ? content.length : 0)
             }
-        },
-        initialData: { content: [], totalElements: 0, totalPages: 0 }
+        }
     })
 }
 
@@ -294,8 +289,7 @@ export const useActivityLog = () => {
         queryFn: async () => {
             const response = await api.get('/dashboard/activity').catch(() => ({ data: [] }));
             return normalizeArray(response.data);
-        },
-        initialData: []
+        }
     })
 }
 
@@ -305,7 +299,6 @@ export const useTrendStats = (from: string, to: string) => {
         queryFn: async () => {
             const response = await api.get('/dashboard/trends', { params: { from, to } }).catch(() => ({ data: [] }));
             return normalizeArray(response.data);
-        },
-        initialData: []
+        }
     })
 }
