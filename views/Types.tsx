@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { DataService } from '../services/storageService';
 import { generateDescription } from '../services/geminiService';
 import { VehicleType } from '../types';
 import { Card, Button, Input, TextArea, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
-import { useTypes, useCreateType, useUpdateType, useDeleteType, useBulkImportTypes } from '../hooks/useVehicleData';
-import { toast } from 'sonner';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+// Zod Schema
+const typeSchema = z.object({
+  name: z.string().min(1, "Type name is required."),
+  nameAr: z.string().optional(),
+  description: z.string().optional(),
+  descriptionAr: z.string().optional(),
+});
+
+type TypeFormData = z.infer<typeof typeSchema>;
 
 export const TypesView: React.FC = () => {
-  // Hooks
-  const { data: types = [], isLoading: isLoadingTypes } = useTypes();
-  const createType = useCreateType();
-  const updateType = useUpdateType();
-  const deleteType = useDeleteType();
-  const bulkImportTypes = useBulkImportTypes();
-
+  const [types, setTypes] = useState<VehicleType[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -28,57 +34,71 @@ export const TypesView: React.FC = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
-  // Form State
-  const [formData, setFormData] = useState<Partial<VehicleType>>({ name: '', nameAr: '', description: '', descriptionAr: '' });
-  
   // Bulk State
   const [bulkData, setBulkData] = useState('');
+
+  // Form Setup
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors }
+  } = useForm<TypeFormData>({
+    resolver: zodResolver(typeSchema),
+    defaultValues: { name: '', nameAr: '', description: '', descriptionAr: '' }
+  });
+
+  const watchName = watch('name');
+
+  useEffect(() => {
+    refreshData();
+  }, []);
 
   // Reset page on search
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
 
+  const refreshData = () => {
+    setTypes(DataService.getTypes());
+  };
+
   const handleOpenModal = (type?: VehicleType) => {
     if (type) {
       setEditingId(type.id);
-      setFormData(type);
+      reset({
+        name: type.name,
+        nameAr: type.nameAr || '',
+        description: type.description || '',
+        descriptionAr: type.descriptionAr || ''
+      });
     } else {
       setEditingId(null);
-      setFormData({ name: '', nameAr: '', description: '', descriptionAr: '' });
+      reset({ name: '', nameAr: '', description: '', descriptionAr: '' });
     }
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.name) {
-      toast.error("Type name is required.");
-      return;
-    }
-
+  const onSubmit = (data: TypeFormData) => {
+    let updatedTypes;
     if (editingId) {
-      updateType.mutate({ ...formData, id: editingId } as VehicleType, {
-        onSuccess: () => {
-          setIsModalOpen(false);
-          toast.success("Type updated successfully");
-        },
-        onError: () => toast.error("Failed to update type")
-      });
+      updatedTypes = types.map(t => t.id === editingId ? { ...t, ...data } as VehicleType : t);
     } else {
-      createType.mutate({
+      const newType: VehicleType = {
         id: Date.now().toString(),
-        name: formData.name!,
-        nameAr: formData.nameAr || '',
-        description: formData.description || '',
-        descriptionAr: formData.descriptionAr || ''
-      }, {
-        onSuccess: () => {
-          setIsModalOpen(false);
-          toast.success("Type created successfully");
-        },
-        onError: () => toast.error("Failed to create type")
-      });
+        name: data.name,
+        nameAr: data.nameAr || '',
+        description: data.description || '',
+        descriptionAr: data.descriptionAr || ''
+      };
+      updatedTypes = [...types, newType];
     }
+    
+    DataService.saveTypes(updatedTypes);
+    setTypes(updatedTypes);
+    setIsModalOpen(false);
   };
   
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,16 +137,13 @@ export const TypesView: React.FC = () => {
     });
 
     if (newTypes.length > 0) {
-      bulkImportTypes.mutate(newTypes, {
-        onSuccess: () => {
-          setIsBulkOpen(false);
-          setBulkData('');
-          toast.success(`Successfully imported ${newTypes.length} types.`);
-        },
-        onError: () => toast.error("Failed to import types")
-      });
+      const updatedTypes = [...types, ...newTypes];
+      DataService.saveTypes(updatedTypes);
+      setTypes(updatedTypes);
+      setIsBulkOpen(false);
+      setBulkData('');
     } else {
-      toast.info("No valid data found.");
+      alert("No valid data found.");
     }
   };
 
@@ -138,24 +155,24 @@ export const TypesView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    deleteType.mutate(itemToDelete, {
-      onSuccess: () => {
-        setIsDeleteModalOpen(false);
-        setItemToDelete(null);
-        toast.success("Type deleted successfully");
-      },
-      onError: () => toast.error("Failed to delete type")
-    });
+    const id = itemToDelete;
+
+    const filtered = types.filter(t => t.id !== id);
+    DataService.saveTypes(filtered);
+    setTypes(filtered);
+
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   const handleAIGenerate = async () => {
-    if (!formData.name) {
-      toast.error("Please enter a name first.");
+    if (!watchName) {
+      alert("Please enter a name first.");
       return;
     }
     setIsGenerating(true);
-    const desc = await generateDescription(formData.name, "type");
-    setFormData(prev => ({ ...prev, description: desc }));
+    const desc = await generateDescription(watchName, "type");
+    setValue('description', desc);
     setIsGenerating(false);
   };
 
@@ -169,14 +186,6 @@ export const TypesView: React.FC = () => {
   // Pagination Logic
   const totalPages = Math.ceil(filteredTypes.length / ITEMS_PER_PAGE);
   const paginatedTypes = filteredTypes.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  if (isLoadingTypes) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="animate-spin text-slate-400" size={32} />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -273,33 +282,37 @@ export const TypesView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} isLoading={createType.isPending || updateType.isPending}>Save Changes</Button>
+            <Button onClick={handleSubmit(onSubmit)}>Save Changes</Button>
           </>
         }
       >
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <Input 
-                label="Type Name (En)" 
-                value={formData.name} 
-                onChange={e => setFormData({...formData, name: e.target.value})}
-                placeholder="e.g. Convertible"
-            />
-            <Input 
-                label="Type Name (Ar)" 
-                value={formData.nameAr} 
-                onChange={e => setFormData({...formData, nameAr: e.target.value})}
-                placeholder="مكشوفة"
-                dir="rtl"
-            />
+            <div>
+              <Input 
+                  label="Type Name (En)" 
+                  placeholder="e.g. Convertible"
+                  {...register('name')}
+              />
+              {errors.name && <p className="text-red-500 text-xs mt-1 ml-1">{errors.name.message}</p>}
+            </div>
+            <div>
+              <Input 
+                  label="Type Name (Ar)" 
+                  placeholder="مكشوفة"
+                  dir="rtl"
+                  {...register('nameAr')}
+              />
+              {errors.nameAr && <p className="text-red-500 text-xs mt-1 ml-1">{errors.nameAr.message}</p>}
+            </div>
           </div>
           <div className="relative">
             <TextArea 
               label="Description (En)" 
-              value={formData.description} 
-              onChange={e => setFormData({...formData, description: e.target.value})}
               placeholder="Description of the vehicle type..."
+              {...register('description')}
             />
+            {errors.description && <p className="text-red-500 text-xs mt-1 ml-1">{errors.description.message}</p>}
             <div className="absolute top-0 right-0">
                <Button 
                  variant="ai" 
@@ -313,13 +326,15 @@ export const TypesView: React.FC = () => {
                </Button>
             </div>
           </div>
-          <TextArea 
-              label="Description (Ar)" 
-              value={formData.descriptionAr} 
-              onChange={e => setFormData({...formData, descriptionAr: e.target.value})}
-              placeholder="وصف نوع المركبة..."
-              dir="rtl"
-            />
+          <div>
+            <TextArea 
+                label="Description (Ar)" 
+                placeholder="وصف نوع المركبة..."
+                dir="rtl"
+                {...register('descriptionAr')}
+              />
+            {errors.descriptionAr && <p className="text-red-500 text-xs mt-1 ml-1">{errors.descriptionAr.message}</p>}
+          </div>
         </div>
       </Modal>
       
@@ -331,7 +346,7 @@ export const TypesView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete} isLoading={deleteType.isPending}>Delete Type</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete Type</Button>
           </>
         }
       >
@@ -355,7 +370,7 @@ export const TypesView: React.FC = () => {
         footer={
           <>
              <Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkImport} isLoading={bulkImportTypes.isPending}>Import Types</Button>
+             <Button onClick={handleBulkImport}>Import Types</Button>
           </>
         }
       >

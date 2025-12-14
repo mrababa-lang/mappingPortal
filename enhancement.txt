@@ -1,111 +1,72 @@
 # SlashData Vehicle Portal - Enhancement & Fixes Log
 
-This document outlines the roadmap to transition the application from a "Mock/Prototype" state to a robust "Production" system backed by Java Spring Boot and MySQL.
+This document outlines the roadmap to transition the application from the current "Mock/Prototype" state to a robust "Production" system backed by Java Spring Boot and MySQL.
 
 **Status Key:**
-[X] = Implemented in Prototype
-[ ] = Pending Backend Integration/Refactoring
+[X] = Implemented
+[ ] = Pending
 
 ================================================================================
-SECTION 1: CRITICAL FIXES (Production Migration)
+SECTION 1: BACKEND MIGRATION (Priority High)
 ================================================================================
 
 ## 1. Architecture & Routing
-- **Task**: Replace state-based navigation with React Router.
-- **Current**: `App.tsx` uses a simple state (`currentView`) for navigation.
-- **Goal**: Enable deep linking, browser history support, and protected routes.
-- **Prompt for AI**:
-  > Refactor the application to use `react-router-dom` for navigation instead of the current state-based `currentView` variable.
-  > 1. Install `react-router-dom`.
-  > 2. In `index.tsx`, wrap `<App />` with `<BrowserRouter>`.
-  > 3. In `App.tsx`, remove the `currentView` state. Use `<Routes>` and `<Route>` to define:
-  >    - `/login` -> `LoginView`
-  >    - `/` -> `Dashboard` (Protected)
-  >    - `/makes` -> `MakesView` (Protected)
-  >    - `/models` -> `ModelsView` (Protected)
-  >    - `/types` -> `TypesView` (Protected)
-  >    - `/adp/master` -> `ADPMasterView` (Protected)
-  >    - `/adp/makes` -> `ADPMakesView` (Protected)
-  >    - `/adp/mapping` -> `ADPMappingView` (Protected)
-  >    - `/adp/review` -> `MappingReviewView` (Protected)
-  >    - `/users` -> `UsersView` (Protected)
-  >    - `/tracking` -> `TrackingView` (Protected)
-  > 4. Create a `ProtectedRoute` component that checks for the user/token. If missing, redirect to `/login`.
-  > 5. Update `components/Layout.tsx` to use `Link` or `NavLink` for sidebar items.
+- [ ] **React Router Integration**: 
+  - Replace state-based `currentView` in `App.tsx` with `react-router-dom`.
+  - Implement Protected Routes for authentication checks.
+  - Enable deep linking (e.g., directly navigating to `/adp/mapping`).
 
-## 2. API Integration & ID Standardization
-- **Task**: Centralize API service and switch to Integer IDs.
-- **Current**: `storageService.ts` uses `localStorage` with String/UUID IDs.
-- **Goal**: Connect to Spring Boot and handle Auto-Increment IDs for Makes/Models.
-- **Prompt for AI**:
-  > Create a new file `services/api.ts` to replace `services/storageService.ts`.
-  > 1. Install `axios`.
-  > 2. Initialize `axios` with base URL from env.
-  > 3. **ID Migration**: Update `types.ts`. Change `id` fields for `Make`, `Model`, and `VehicleType` from `string` to `number` (or keep string if backend sends numbers as strings, but frontend must treat them as readonly/generated).
-  > 4. Define typed API methods. Ensure `createMake`, `createModel`, etc., do NOT send an ID in the payload, as the database auto-increments it.
-  >    - `createMake(data: Omit<Make, 'id'>): Promise<Make>`
-  > 5. Implement Token handling via Interceptors (Attach Bearer token, handle 401).
+## 2. API Service Layer
+- [ ] **Replace StorageService**:
+  - Create `services/api.ts` using `axios`.
+  - Replace local `localStorage` CRUD operations with REST API calls.
+  - Implement Request/Response interceptors for JWT injection and global error handling.
+- [ ] **ID Management**:
+  - Transition from Frontend UUIDs (String) to Backend Auto-Increment IDs (Long/BigInt) for Makes, Models, and Users.
 
-## 3. Security & Secrets
-- **Task**: Move AI calls to the Server-Side.
-- **Current**: `geminiService.ts` exposes the API Key in the browser.
-- **Goal**: Proxy AI requests through the backend.
-- **Prompt for AI**:
-  > Refactor `services/geminiService.ts`.
-  > 1. Remove client-side `@google/genai` usage.
-  > 2. Implement `generateDescription` and `suggestMapping` to call backend endpoints:
-  >    - `POST /api/ai/generate-description`
-  >    - `POST /api/ai/suggest-mapping`
-  > 3. Ensure the backend handles the context assembly and prompts.
-
-## 4. Authentication
-- **Task**: Implement real JWT Authentication.
-- **Current**: Mock login against hardcoded array.
-- **Goal**: Authenticate against the backend.
-- **Prompt for AI**:
-  > Update `views/Login.tsx` to use real auth.
-  > 1. Call `api.login({ email, password })`.
-  > 2. Store JWT token in `localStorage`.
-  > 3. Update global User context.
-
-## 5. Data Handling (CSV & Concurrency)
-- **Task**: Server-side CSV parsing.
-- **Current**: Client-side parsing.
-- **Goal**: Scalable import.
-- **Prompt for AI**:
-  > Update "Bulk Import" in `Makes.tsx`, `Models.tsx`, and `ADPMaster.tsx`.
-  > 1. Send `FormData` with file to `POST /api/{resource}/upload`.
-  > 2. Handle backend response regarding success/failure counts.
+## 3. Security & AI
+- [ ] **Server-Side AI Proxy**:
+  - Move `geminiService.ts` logic to the backend to protect the API Key.
+  - Frontend should call `POST /api/ai/suggest` instead of contacting Google directly.
+- [ ] **Authentication**:
+  - Replace mock login in `views/Login.tsx` with real JWT authentication (`POST /api/auth/login`).
 
 ================================================================================
-SECTION 2: RECOMMENDED ENHANCEMENTS (UX & Scalability)
+SECTION 2: REMAINING FRONTEND ENHANCEMENTS
 ================================================================================
 
-## 1. State Management (Extend coverage)
-- **Task**: Extend TanStack Query to all views.
-- **Status**: [X] MakesView, [ ] Others.
-- **Goal**: Consistent caching.
-- **Prompt for AI**:
-  > Extend `hooks/useVehicleData.ts` and create new hook files if necessary.
-  > 1. Implement `useADPMaster`, `useADPMappings`, `useUsers`.
-  > 2. Refactor `ModelsView`, `TypesView`, `ADPMasterView`, `ADPMappingView` to use these hooks instead of `useEffect` fetching.
-  > 3. Ensure `queryClient.invalidateQueries` is called after mutations (Create/Update/Delete).
+## 1. Dashboard Enhancements (New)
+- [ ] **Interactive Drill-Down**: 
+  - Clicking on chart bars (e.g., "Missing Model") should navigate to the ADP Mapping view with that filter active.
+- [ ] **Recent Activity Widget**:
+  - Display the last 5-10 actions (User X mapped Y) directly on the dashboard sidebar or bottom panel.
+- [ ] **Mapping Trend Chart**:
+  - Add a line chart showing "Mappings Completed" over the last 30 days.
+- [ ] **Date Range Filtering**:
+  - Add global date filter to Dashboard to view stats for specific periods.
 
-## 2. Form Handling (Extend coverage)
-- **Task**: Apply Zod & React Hook Form to remaining views.
-- **Status**: [X] ModelsView, [ ] MakesView, TypesView, UsersView.
-- **Goal**: Robust validation.
-- **Prompt for AI**:
-  > Refactor `MakesView`, `TypesView`, and `UsersView` forms.
-  > 1. Create Zod schemas for Make, Type, and User.
-  > 2. Replace controlled inputs with `useForm` registers.
-  > 3. Display validation errors inline.
+## 2. State Management (TanStack Query)
+- [X] **Vehicle Data Hooks**: Implemented in `useVehicleData.ts`.
+- [ ] **ADP Data Hooks**: 
+  - Create `useADPMaster`, `useADPMappings`, `useADPMakeMappings`.
+  - Implement optimistic updates for mapping actions (Approve/Reject).
+- [ ] **User & Tracking Hooks**: 
+  - Create `useUsers` and `useActivityStats`.
 
-## 3. DevOps & Quality
-- **Task**: Error Boundaries & Tests.
-- **Goal**: Production reliability.
-- **Prompt for AI**:
-  > Enhance app reliability.
-  > 1. Create `components/ErrorBoundary.tsx`.
-  > 2. Install `vitest` and `@testing-library/react`.
-  > 3. Create unit tests for `Login.test.tsx` and `Dashboard.test.tsx`.
+## 3. Data Handling
+- [X] **Virtualization**: Implemented in `ADPMasterView` for large datasets.
+- [ ] **Server-Side CSV Import**:
+  - Update Bulk Import modals to stream files to backend `POST /api/{resource}/upload` endpoints instead of client-side parsing.
+
+## 4. Quality Assurance
+- [ ] **Error Boundaries**: Wrap main views to catch React rendering errors.
+- [ ] **Unit Testing**: Add tests for critical logic (Mapping suggestions, Data transformation).
+
+================================================================================
+SECTION 3: RECENTLY COMPLETED
+================================================================================
+- [X] **Form Validation**: Refactored `Makes.tsx`, `Types.tsx`, and `Users.tsx` to use Zod & React Hook Form.
+- [X] **Models Validation**: Implemented Zod & React Hook Form for Models.
+- [X] **React Version Fix**: Resolved React 18 vs 19 conflict.
+- [X] **Virtualization**: Implemented in `ADPMasterView`.
+- [X] **Global Make Mapping**: Implemented in `ADPMakesView`.

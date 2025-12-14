@@ -20,7 +20,7 @@ import { NavItem, ViewState, User } from '../types';
 interface LayoutProps {
   children: React.ReactNode;
   currentView: ViewState;
-  onNavigate: (view: ViewState) => void;
+  onNavigate: (view: ViewState, params?: any) => void;
   onLogout?: () => void;
   user: User | null;
 }

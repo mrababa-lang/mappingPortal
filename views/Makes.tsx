@@ -4,6 +4,17 @@ import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell
 import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
 import { useMakes, useModels, useTypes, useCreateMake, useUpdateMake, useDeleteMake, useBulkImportMakes } from '../hooks/useVehicleData';
 import { toast } from 'sonner';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+// Zod Schema
+const makeSchema = z.object({
+  name: z.string().min(1, "Make name is required."),
+  nameAr: z.string().optional(),
+});
+
+type MakeFormData = z.infer<typeof makeSchema>;
 
 export const MakesView: React.FC = () => {
   const { data: makes = [], isLoading: isLoadingMakes } = useMakes();
@@ -27,11 +38,19 @@ export const MakesView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const ITEMS_PER_PAGE = 20;
   
-  // Form State
-  const [formData, setFormData] = useState<Partial<Make>>({ name: '', nameAr: '' });
-  
   // Bulk State
   const [bulkData, setBulkData] = useState('');
+
+  // Form Setup
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting }
+  } = useForm<MakeFormData>({
+    resolver: zodResolver(makeSchema),
+    defaultValues: { name: '', nameAr: '' }
+  });
 
   // Reset page on search
   useEffect(() => {
@@ -41,33 +60,31 @@ export const MakesView: React.FC = () => {
   const handleOpenModal = (make?: Make) => {
     if (make) {
       setEditingId(make.id);
-      setFormData(make);
+      reset({
+        name: make.name,
+        nameAr: make.nameAr || ''
+      });
     } else {
       setEditingId(null);
-      setFormData({ name: '', nameAr: '' });
+      reset({ name: '', nameAr: '' });
     }
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.name) {
-        toast.error("Make name is required.");
-        return;
-    }
-
+  const onSubmit = (data: MakeFormData) => {
     // Validation: Check for duplicates
     const duplicate = makes.find(m => 
-        m.name.trim().toLowerCase() === formData.name!.trim().toLowerCase() && 
+        m.name.trim().toLowerCase() === data.name.trim().toLowerCase() && 
         m.id !== editingId
     );
 
     if (duplicate) {
-        toast.error(`A manufacturer with the name "${formData.name}" already exists.`);
+        toast.error(`A manufacturer with the name "${data.name}" already exists.`);
         return;
     }
 
     if (editingId) {
-      updateMake.mutate({ ...formData, id: editingId } as Make, {
+      updateMake.mutate({ ...data, id: editingId } as Make, {
         onSuccess: () => {
           setIsModalOpen(false);
           toast.success("Make updated successfully");
@@ -77,8 +94,8 @@ export const MakesView: React.FC = () => {
     } else {
       createMake.mutate({
         id: Date.now().toString(),
-        name: formData.name!,
-        nameAr: formData.nameAr || ''
+        name: data.name,
+        nameAr: data.nameAr || ''
       }, {
         onSuccess: () => {
           setIsModalOpen(false);
@@ -298,25 +315,29 @@ export const MakesView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} isLoading={createMake.isPending || updateMake.isPending}>Save Changes</Button>
+            <Button onClick={handleSubmit(onSubmit)} isLoading={isSubmitting || createMake.isPending || updateMake.isPending}>Save Changes</Button>
           </>
         }
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 gap-4">
-             <Input 
-                label="Make Name (English)" 
-                value={formData.name} 
-                onChange={e => setFormData({...formData, name: e.target.value})}
-                placeholder="e.g. Toyota"
-              />
+             <div>
+               <Input 
+                  label="Make Name (English)" 
+                  placeholder="e.g. Toyota"
+                  {...register('name')}
+                />
+                {errors.name && <p className="text-red-500 text-xs mt-1 ml-1">{errors.name.message}</p>}
+             </div>
+             <div>
               <Input 
                 label="Make Name (Arabic)" 
-                value={formData.nameAr} 
-                onChange={e => setFormData({...formData, nameAr: e.target.value})}
                 placeholder="تويوتا"
                 dir="rtl"
+                {...register('nameAr')}
               />
+              {errors.nameAr && <p className="text-red-500 text-xs mt-1 ml-1">{errors.nameAr.message}</p>}
+             </div>
           </div>
         </div>
       </Modal>

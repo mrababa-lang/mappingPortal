@@ -4,91 +4,100 @@
 ## 1. Architecture Overview
 - **Framework**: Java 17+ with **Spring Boot 3.x**.
 - **Database**: **MySQL 8.0+**.
-- **Security**: Spring Security + JWT.
-- **AI**: Google Gemini API Integration.
+- **Security**: Spring Security + JWT (Stateless).
+- **AI**: Google Gemini API Integration (Server-Side).
 
-## 2. Data Strategy & ID Generation
-- **SlashData Entities (Makes, Models, Types)**:
-  - Must use **Database Auto-Increment** (`BIGINT`).
-  - API payloads for Creation (`POST`) **must not** include an ID.
-  - API responses **must** include the generated ID.
-- **ADP Entities**:
-  - Use String IDs provided by the source system (or composite keys).
-- **Users**:
-  - Use **Database Auto-Increment** (`BIGINT`).
+## 2. API Endpoints
 
-## 3. API Endpoints
+### 2.1 Authentication & Users
+- `POST /api/auth/login`:
+  - Input: `{ email, password }`
+  - Output: `{ token: string, user: UserDTO }`
+- `GET /api/users`: Returns list of users.
+- `POST /api/users`: Create user (hash password using BCrypt).
+- `PUT /api/users/{id}`: Update user.
+- `DELETE /api/users/{id}`: Soft delete or hard delete.
 
-### 3.1 Authentication
-- `POST /api/auth/login`: Returns `{ token: string, user: UserDTO }`. UserDTO includes numeric ID.
+### 2.2 Dashboard & Analytics
+- `GET /api/dashboard/stats`:
+  - Returns aggregate counts: `{ totalMakes, totalModels, totalTypes, adpCoveragePct, mappedCount, unmappedCount }`.
+- `GET /api/dashboard/activity`:
+  - Returns: `List<ActivityLogDTO>` (Last 10 actions for the dashboard widget).
+- `GET /api/dashboard/trends`:
+  - Input: `?days=30`
+  - Returns: `List<{ date: string, count: number }>` (Daily mapping counts for trend chart).
+- `GET /api/tracking/activity`:
+  - Input: `?userId={id}&from={date}&to={date}`
+  - Returns: `List<ActivityLogDTO>` (Full searchable history).
+- `GET /api/tracking/leaderboard`:
+  - Returns user contribution stats.
 
-### 3.2 Vehicle Management (Auto-Increment IDs)
+### 2.3 Vehicle Management
 #### Makes
 - `GET /api/makes`: Returns `List<MakeDTO>`.
-- `POST /api/makes`: Payload `{ name, nameAr }`. Returns `MakeDTO` (with new ID).
+- `POST /api/makes`: Payload `{ name, nameAr }`.
 - `POST /api/makes/upload`: Multipart CSV.
 
 #### Models
 - `GET /api/models`: Returns `List<ModelDTO>`.
-- `POST /api/models`: Payload `{ name, nameAr, makeId(Long), typeId(Long) }`.
+- `POST /api/models`: Payload `{ name, nameAr, makeId, typeId }`.
 - `POST /api/models/upload`: Multipart CSV.
-- **Validation**: Ensure `makeId` and `typeId` exist. Check uniqueness of `Name + MakeID`.
 
 #### Types
-- `GET /api/types`
-- `POST /api/types`
+- `GET /api/types`: Returns `List<TypeDTO>`.
+- `POST /api/types`: Payload `{ name, nameAr, description, descriptionAr }`.
 
-### 3.3 ADP & Mapping
-#### ADP Master
-- `GET /api/adp/master`: Searchable (Pageable).
-- `POST /api/adp/master/upload`: Multipart CSV.
+### 2.4 ADP Master & Mapping
+#### ADP Master Data
+- `GET /api/adp/master`: 
+  - Support Pagination (`?page=0&size=50`).
+  - Support Search (`?q=toyota`).
+- `POST /api/adp/master/upload`: Multipart CSV (Async processing recommended).
 
-#### Mapping Operations
-- `GET /api/adp/mappings`: Filter by status, dates.
+#### ADP Mappings (Individual)
+- `GET /api/adp/mappings`: 
+  - Filters: `?status=MISSING_MODEL`, `?reviewed=false`.
 - `PUT /api/adp/mappings/{adpId}`:
-  - Upsert mapping.
-  - Payload: `{ status, makeId(Long), modelId(Long) }`.
-  - **Trigger**: Insert record into `ADPMappingHistory` table (`action=UPDATED`).
-  - **Reset**: Set `reviewedAt = null` to require re-approval.
-- `GET /api/adp/mappings/{adpId}/history`:
-  - Returns `List<HistoryEntryDTO>` ordered by timestamp desc.
+  - Upsert mapping logic.
+  - Payload: `{ status, makeId, modelId }`.
+  - **Side Effect**: Create `ADPMappingHistory` entry (Action: UPDATED).
+  - **Side Effect**: If record was previously reviewed, reset `reviewedAt` to null.
+- `DELETE /api/adp/mappings/{adpId}`:
+  - Remove mapping (revert to Unmapped).
+  - **Side Effect**: Create `ADPMappingHistory` entry (Action: DELETED/UNLINKED).
 
-#### Review Workflow
-- `POST /api/adp/mappings/{adpId}/approve`:
-  - Update `reviewedAt`, `reviewedBy`.
-  - Insert History (`action=REVIEWED`).
-- `DELETE /api/adp/mappings/{adpId}/reject`:
-  - Delete mapping record.
-  - Insert History (`action=REJECTED`).
-
-### 3.4 AI Integration
-- `POST /api/ai/suggest-mapping`:
-  - Input: `{ description: string }`.
-  - Logic:
-    1. Fetch list of Makes/Models from DB (cached/optimized).
-    2. Call Gemini API with context.
-    3. Return `{ makeId: Long, modelId: Long, reasoning: string }`.
-- `POST /api/ai/generate-description`:
-  - Input: `{ name: string, type: "make"|"type" }`.
-  - Returns: `{ description: string }`.
-
-## 4. Business Logic Details
-
-### 4.1 Global Make Mapping
+#### ADP Make Mappings (Global Rules)
+- `GET /api/adp/makes`: Returns list of unique ADP makes and their SD mapping status.
 - `POST /api/adp/makes/map`:
   - Payload: `{ adpMakeId: string, sdMakeId: Long }`.
-  - Logic:
+  - **Business Logic**: 
     1. Save to `ADPMakeMappings`.
-    2. Async Job / Transactional Process:
-       - Find all `ADPMappings` linked to this `adpMakeId` where `status` is `MISSING_MAKE` or no mapping exists.
-       - Update them to `status=MISSING_MODEL`, `makeId=sdMakeId`.
-       - Log history for each updated record.
+    2. Find all unmapped `ADPMaster` records with this `adpMakeId`.
+    3. Create/Update their `ADPMappings` to status `MISSING_MODEL` linked to `sdMakeId`.
+    4. Log bulk history.
 
-### 4.2 Audit Trail
-- Use Spring AOP or Entity Listeners (JPA `@PostPersist`, `@PostUpdate`) to automatically write to `ADPMappingHistory` whenever `ADPMappings` is modified.
-- Ensure the `currentUserId` is extracted from the Security Context.
+#### Mapping Review
+- `POST /api/adp/mappings/{adpId}/approve`:
+  - Set `reviewedAt` = NOW, `reviewedBy` = CurrentUser.
+- `POST /api/adp/mappings/approve-batch`:
+  - Payload: `{ ids: string[] }`.
 
-## 5. Security Roles
-- `ADMIN`: Full access (Users, Delete operations).
-- `MAPPING_ADMIN`: Full access to Data & Mappings (Approve/Reject).
-- `MAPPING_USER`: Read Data, Propose Mappings (Update). No Approve/Reject.
+### 2.5 AI Integration
+- `POST /api/ai/suggest-mapping`:
+  - Input: `{ description: string }`
+  - Logic: Fetch context (Makes/Models) -> Call Gemini -> Return `{ makeId?, modelId?, reasoning }`.
+- `POST /api/ai/suggest-models`:
+  - Input: `{ makeName: string }`
+  - Logic: Prompt Gemini for popular models -> Return `string[]`.
+- `POST /api/ai/generate-description`:
+  - Input: `{ name: string, context: "make"|"type" }`
+  - Return: `{ description: string }`.
+
+## 3. Database Constraints
+- **Uniqueness**: 
+  - `Makes.name` must be unique.
+  - `Models` must be unique by `(make_id, name)`.
+  - `VehicleTypes.name` must be unique.
+- **Foreign Keys**:
+  - `ADPMappings` -> `ADPMaster(id)` (Cascade Delete).
+  - `ADPMappings` -> `Models(id)` (Set Null).

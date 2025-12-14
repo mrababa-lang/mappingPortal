@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { DataService } from '../services/storageService';
 import { User } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Select, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, UserCircle, Shield, CheckCircle2, XCircle, Lock, AlertTriangle, Loader2 } from 'lucide-react';
-import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../hooks/useVehicleData';
-import { toast } from 'sonner';
+import { Plus, Trash2, Edit2, UserCircle, Shield, CheckCircle2, XCircle, Lock, AlertTriangle } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+
+// Zod Schema
+const userSchema = z.object({
+  name: z.string().min(1, "Full Name is required."),
+  email: z.string().email("Invalid email address."),
+  role: z.enum(['Admin', 'Mapping Admin', 'Mapping User']),
+  status: z.enum(['Active', 'Inactive']),
+  password: z.string().optional(),
+});
+
+type UserFormData = z.infer<typeof userSchema>;
 
 export const UsersView: React.FC = () => {
-  // Hooks
-  const { data: users = [], isLoading: isLoadingUsers } = useUsers();
-  const createUser = useCreateUser();
-  const updateUser = useUpdateUser();
-  const deleteUser = useDeleteUser();
-
+  const [users, setUsers] = useState<User[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -20,65 +28,81 @@ export const UsersView: React.FC = () => {
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-  
-  // Form State
-  const [formData, setFormData] = useState<Partial<User>>({ 
-    name: '', email: '', role: 'Mapping User', status: 'Active', password: ''
+
+  // Form Setup
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors }
+  } = useForm<UserFormData>({
+    resolver: zodResolver(userSchema),
+    defaultValues: { name: '', email: '', role: 'Mapping User', status: 'Active', password: '' }
   });
+
+  useEffect(() => {
+    refreshData();
+  }, []);
+
+  const refreshData = () => {
+    setUsers(DataService.getUsers());
+  };
 
   const handleOpenModal = (user?: User) => {
     if (user) {
       setEditingId(user.id);
-      // Don't show existing password, allow reset
-      setFormData({ ...user, password: '' });
+      reset({
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
+        password: '' // Don't show existing password
+      });
     } else {
       setEditingId(null);
-      setFormData({ name: '', email: '', role: 'Mapping User', status: 'Active', password: '' });
+      reset({ name: '', email: '', role: 'Mapping User', status: 'Active', password: '' });
     }
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    if (!formData.name || !formData.email) {
-      toast.error("Name and Email are required.");
+  const onSubmit = (data: UserFormData) => {
+    // Require password for new users
+    if (!editingId && !data.password) {
+      setError('password', { type: 'manual', message: 'Password is required for new users.' });
       return;
     }
 
-    // Require password for new users
-    if (!editingId && !formData.password) {
-      toast.error("Password is required for new users.");
-      return;
-    }
+    let updatedUsers = [...users];
 
     if (editingId) {
-      // Find current user to keep old password if not changing
-      const currentUser = users.find(u => u.id === editingId);
-      const passwordToSave = formData.password ? formData.password : currentUser?.password;
-      
-      updateUser.mutate({ ...formData, id: editingId, password: passwordToSave } as User, {
-        onSuccess: () => {
-          setIsModalOpen(false);
-          toast.success("User updated successfully");
-        },
-        onError: () => toast.error("Failed to update user")
+      updatedUsers = users.map(u => {
+        if (u.id === editingId) {
+          // Only update password if a new one was entered
+          const updatedUser = { ...u, ...data };
+          if (!data.password) {
+            updatedUser.password = u.password;
+          }
+          return updatedUser as User;
+        }
+        return u;
       });
     } else {
-      createUser.mutate({
+      const newUser: User = {
         id: Date.now().toString(),
-        name: formData.name!,
-        email: formData.email!,
-        password: formData.password!,
-        role: formData.role! as 'Admin' | 'Mapping Admin' | 'Mapping User',
-        status: formData.status! as 'Active' | 'Inactive',
+        name: data.name,
+        email: data.email,
+        password: data.password!,
+        role: data.role,
+        status: data.status,
         lastActive: 'Just now'
-      }, {
-        onSuccess: () => {
-          setIsModalOpen(false);
-          toast.success("User created successfully");
-        },
-        onError: () => toast.error("Failed to create user")
-      });
+      };
+      updatedUsers.push(newUser);
     }
+    
+    DataService.saveUsers(updatedUsers);
+    setUsers(updatedUsers);
+    setIsModalOpen(false);
   };
 
   const initiateDelete = (id: string, e: React.MouseEvent) => {
@@ -89,27 +113,20 @@ export const UsersView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    deleteUser.mutate(itemToDelete, {
-      onSuccess: () => {
-        setIsDeleteModalOpen(false);
-        setItemToDelete(null);
-        toast.success("User deleted successfully");
-      },
-      onError: () => toast.error("Failed to delete user")
-    });
+    const id = itemToDelete;
+
+    const currentUsers = DataService.getUsers();
+    const filtered = currentUsers.filter(u => u.id !== id);
+    DataService.saveUsers(filtered);
+    setUsers(filtered);
+
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   // Pagination Logic
   const totalPages = Math.ceil(users.length / ITEMS_PER_PAGE);
   const paginatedUsers = users.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  if (isLoadingUsers) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="animate-spin text-slate-400" size={32} />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -198,24 +215,28 @@ export const UsersView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} isLoading={createUser.isPending || updateUser.isPending}>Save User</Button>
+            <Button onClick={handleSubmit(onSubmit)}>Save User</Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Input 
-            label="Full Name" 
-            value={formData.name} 
-            onChange={e => setFormData({...formData, name: e.target.value})}
-            placeholder="John Doe"
-          />
-          <Input 
-            label="Email Address" 
-            type="email" 
-            value={formData.email} 
-            onChange={e => setFormData({...formData, email: e.target.value})}
-            placeholder="john@example.com"
-          />
+          <div>
+            <Input 
+              label="Full Name" 
+              placeholder="John Doe"
+              {...register('name')}
+            />
+            {errors.name && <p className="text-red-500 text-xs mt-1 ml-1">{errors.name.message}</p>}
+          </div>
+          <div>
+            <Input 
+              label="Email Address" 
+              type="email" 
+              placeholder="john@example.com"
+              {...register('email')}
+            />
+            {errors.email && <p className="text-red-500 text-xs mt-1 ml-1">{errors.email.message}</p>}
+          </div>
           
           {/* Password Field */}
           <div className="relative">
@@ -225,33 +246,37 @@ export const UsersView: React.FC = () => {
              <Input 
                label={editingId ? "New Password (Leave blank to keep current)" : "Password"}
                type="password"
-               value={formData.password}
-               onChange={e => setFormData({...formData, password: e.target.value})}
                placeholder={editingId ? "••••••••" : "Enter secure password"}
                className="pl-9"
+               {...register('password')}
              />
+             {errors.password && <p className="text-red-500 text-xs mt-1 ml-1">{errors.password.message}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Select 
-              label="Role"
-              value={formData.role}
-              onChange={e => setFormData({...formData, role: e.target.value as any})}
-              options={[
-                { value: 'Admin', label: 'Admin' },
-                { value: 'Mapping Admin', label: 'Mapping Admin' },
-                { value: 'Mapping User', label: 'Mapping User' }
-              ]}
-            />
-            <Select 
-              label="Status"
-              value={formData.status}
-              onChange={e => setFormData({...formData, status: e.target.value as any})}
-              options={[
-                { value: 'Active', label: 'Active' },
-                { value: 'Inactive', label: 'Inactive' }
-              ]}
-            />
+            <div>
+              <Select 
+                label="Role"
+                options={[
+                  { value: 'Admin', label: 'Admin' },
+                  { value: 'Mapping Admin', label: 'Mapping Admin' },
+                  { value: 'Mapping User', label: 'Mapping User' }
+                ]}
+                {...register('role')}
+              />
+              {errors.role && <p className="text-red-500 text-xs mt-1 ml-1">{errors.role.message}</p>}
+            </div>
+            <div>
+              <Select 
+                label="Status"
+                options={[
+                  { value: 'Active', label: 'Active' },
+                  { value: 'Inactive', label: 'Inactive' }
+                ]}
+                {...register('status')}
+              />
+              {errors.status && <p className="text-red-500 text-xs mt-1 ml-1">{errors.status.message}</p>}
+            </div>
           </div>
         </div>
       </Modal>
@@ -264,7 +289,7 @@ export const UsersView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete} isLoading={deleteUser.isPending}>Delete User</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete User</Button>
           </>
         }
       >

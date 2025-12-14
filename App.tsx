@@ -16,15 +16,23 @@ import { ViewState, User } from './types';
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
+  const [viewParams, setViewParams] = useState<any>(null);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     setCurrentView('dashboard');
+    setViewParams(null);
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setCurrentView('login');
+    setViewParams(null);
+  };
+
+  const handleNavigate = (view: ViewState, params?: any) => {
+    setCurrentView(view);
+    setViewParams(params || null);
   };
 
   // If not logged in, show login page
@@ -35,7 +43,7 @@ function App() {
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onNavigate={handleNavigate} />;
       case 'makes':
         return <MakesView />;
       case 'models':
@@ -47,7 +55,7 @@ function App() {
       case 'adp-makes':
         return <ADPMakesView />;
       case 'adp-mapping':
-        return <ADPMappingView />;
+        return <ADPMappingView initialParams={viewParams} />;
       case 'mapping-review':
         return <MappingReviewView />;
       case 'users':
@@ -55,14 +63,14 @@ function App() {
       case 'tracking':
         return <TrackingView />;
       default:
-        return <Dashboard />;
+        return <Dashboard onNavigate={handleNavigate} />;
     }
   };
 
   return (
     <Layout 
       currentView={currentView} 
-      onNavigate={setCurrentView}
+      onNavigate={handleNavigate}
       onLogout={handleLogout}
       user={currentUser}
     >

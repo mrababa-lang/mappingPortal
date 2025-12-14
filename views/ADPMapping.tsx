@@ -1,20 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { DataService } from '../services/storageService';
 import { suggestMapping } from '../services/geminiService';
-import { ADPMapping, ADPMaster, MappingStatus } from '../types';
+import { ADPMapping, Model, ADPMaster, Make, MappingStatus } from '../types';
 import { Card, Button, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Input, Pagination, SearchableSelect } from '../components/UI';
-import { Edit2, Link, Unlink, AlertCircle, CheckCircle2, Filter, X, Download, HelpCircle, AlertTriangle, Search, History, Loader2 } from 'lucide-react';
+import { Edit2, Link, Unlink, AlertCircle, CheckCircle2, Filter, X, Download, HelpCircle, AlertTriangle, Search, History, Sparkles } from 'lucide-react';
 import { HistoryModal } from '../components/HistoryModal';
 import { toast } from 'sonner';
-import { useADPMaster, useADPMappings, useModels, useMakes, useSaveADPMappings } from '../hooks/useVehicleData';
-import { DataService } from '../services/storageService'; // Keeping for UI helper functions like getUserName
 
-export const ADPMappingView: React.FC = () => {
-  // Hooks
-  const { data: adpList = [], isLoading: isLoadingADP } = useADPMaster();
-  const { data: mappings = [], isLoading: isLoadingMappings } = useADPMappings();
-  const { data: models = [], isLoading: isLoadingModels } = useModels();
-  const { data: makes = [], isLoading: isLoadingMakes } = useMakes();
-  const saveMappingsMutation = useSaveADPMappings();
+interface ADPMappingViewProps {
+  initialParams?: {
+    statusFilter?: 'all' | 'mapped' | 'unmapped' | 'issues';
+    dateFrom?: string;
+    dateTo?: string;
+  };
+}
+
+export const ADPMappingView: React.FC<ADPMappingViewProps> = ({ initialParams }) => {
+  const [adpList, setAdpList] = useState<ADPMaster[]>([]);
+  const [mappings, setMappings] = useState<ADPMapping[]>([]);
+  const [models, setModels] = useState<Model[]>([]);
+  const [makes, setMakes] = useState<Make[]>([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAdpItem, setEditingAdpItem] = useState<ADPMaster | null>(null);
@@ -41,10 +46,30 @@ export const ADPMappingView: React.FC = () => {
   const [selectedModelId, setSelectedModelId] = useState<string>('');
   const [isSuggesting, setIsSuggesting] = useState(false);
 
+  useEffect(() => {
+    refreshData();
+  }, []);
+
+  // Apply initial filters if provided
+  useEffect(() => {
+    if (initialParams) {
+      if (initialParams.statusFilter) setStatusFilter(initialParams.statusFilter);
+      if (initialParams.dateFrom) setDateFrom(initialParams.dateFrom);
+      if (initialParams.dateTo) setDateTo(initialParams.dateTo);
+    }
+  }, [initialParams]);
+
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [dateFrom, dateTo, statusFilter, searchQuery]);
+
+  const refreshData = () => {
+    setAdpList(DataService.getADPMaster());
+    setMappings(DataService.getADPMappings());
+    setModels(DataService.getModels());
+    setMakes(DataService.getMakes());
+  };
 
   const getMappingForAdp = (adpId: string) => {
     return mappings.find(m => m.adpId === adpId);
@@ -142,13 +167,10 @@ export const ADPMappingView: React.FC = () => {
       newMappings.push(mappingData);
     }
 
-    saveMappingsMutation.mutate(newMappings, {
-      onSuccess: () => {
-        setIsModalOpen(false);
-        toast.success("Mapping saved successfully");
-      },
-      onError: () => toast.error("Failed to save mapping")
-    });
+    DataService.saveADPMappings(newMappings);
+    setMappings(newMappings); // Immediate Update
+    setIsModalOpen(false);
+    toast.success("Mapping saved successfully");
   };
 
   const initiateDelete = (adpId: string, e: React.MouseEvent) => {
@@ -162,14 +184,12 @@ export const ADPMappingView: React.FC = () => {
     const adpId = itemToDelete;
 
     const filtered = mappings.filter(m => m.adpId !== adpId);
-    saveMappingsMutation.mutate(filtered, {
-      onSuccess: () => {
-        setIsDeleteModalOpen(false);
-        setItemToDelete(null);
-        toast.success("Mapping removed");
-      },
-      onError: () => toast.error("Failed to remove mapping")
-    });
+    DataService.saveADPMappings(filtered);
+    setMappings(filtered); 
+
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
+    toast.success("Mapping removed");
   };
 
   const handleAISuggest = async () => {
@@ -354,16 +374,6 @@ export const ADPMappingView: React.FC = () => {
   // Pagination Logic
   const totalPages = Math.ceil(filteredAdpList.length / ITEMS_PER_PAGE);
   const paginatedList = filteredAdpList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const isLoading = isLoadingADP || isLoadingMappings || isLoadingModels || isLoadingMakes;
-
-  if (isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="animate-spin text-slate-400" size={32} />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -563,7 +573,6 @@ export const ADPMappingView: React.FC = () => {
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
             <Button 
               onClick={handleSave} 
-              isLoading={saveMappingsMutation.isPending}
               disabled={
                 (mappingType === 'MAPPED' && !selectedModelId) || 
                 (mappingType === 'MISSING_MODEL' && !selectedMakeId)
@@ -688,7 +697,7 @@ export const ADPMappingView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete} isLoading={saveMappingsMutation.isPending}>Remove Mapping</Button>
+            <Button variant="danger" onClick={confirmDelete}>Remove Mapping</Button>
           </>
         }
       >

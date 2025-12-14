@@ -1,19 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { DataService } from '../services/storageService';
 import { ADPMaster } from '../types';
 import { Card, Button, Input, Modal, TextArea } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useADPMaster, useCreateADPMaster, useUpdateADPMaster, useDeleteADPMaster, useBulkImportADPMaster } from '../hooks/useVehicleData';
-import { toast } from 'sonner';
 
 export const ADPMasterView: React.FC = () => {
-  // Hooks
-  const { data: adpList = [], isLoading: isLoadingADP } = useADPMaster();
-  const createADPMaster = useCreateADPMaster();
-  const updateADPMaster = useUpdateADPMaster();
-  const deleteADPMaster = useDeleteADPMaster();
-  const bulkImportADPMaster = useBulkImportADPMaster();
-
+  const [adpList, setAdpList] = useState<ADPMaster[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -31,6 +24,14 @@ export const ADPMasterView: React.FC = () => {
     adpTypeId: '', typeEnDesc: '', typeArDesc: ''
   });
 
+  useEffect(() => {
+    refreshData();
+  }, []);
+
+  const refreshData = () => {
+    setAdpList(DataService.getADPMaster());
+  };
+
   const handleOpenModal = (item?: ADPMaster) => {
     if (item) {
       setEditingId(item.id);
@@ -47,21 +48,13 @@ export const ADPMasterView: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!formData.adpMakeId || !formData.adpModelId || !formData.adpTypeId) {
-        toast.error("Please fill in all IDs.");
-        return;
-    }
+    if (!formData.adpMakeId || !formData.adpModelId || !formData.adpTypeId) return;
 
+    let updatedList = [...adpList];
     if (editingId) {
-      updateADPMaster.mutate({ ...formData, id: editingId } as ADPMaster, {
-        onSuccess: () => {
-          setIsModalOpen(false);
-          toast.success("ADP entry updated successfully");
-        },
-        onError: () => toast.error("Failed to update ADP entry")
-      });
+      updatedList = adpList.map(item => item.id === editingId ? { ...item, ...formData } as ADPMaster : item);
     } else {
-      createADPMaster.mutate({
+      const newItem: ADPMaster = {
         id: Date.now().toString(),
         adpMakeId: formData.adpMakeId!,
         makeEnDesc: formData.makeEnDesc!,
@@ -72,14 +65,12 @@ export const ADPMasterView: React.FC = () => {
         adpTypeId: formData.adpTypeId!,
         typeEnDesc: formData.typeEnDesc!,
         typeArDesc: formData.typeArDesc!
-      }, {
-        onSuccess: () => {
-          setIsModalOpen(false);
-          toast.success("ADP entry created successfully");
-        },
-        onError: () => toast.error("Failed to create ADP entry")
-      });
+      };
+      updatedList.push(newItem);
     }
+    DataService.saveADPMaster(updatedList);
+    setAdpList(updatedList);
+    setIsModalOpen(false);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,16 +111,13 @@ export const ADPMasterView: React.FC = () => {
     });
 
     if (newItems.length > 0) {
-      bulkImportADPMaster.mutate(newItems, {
-        onSuccess: () => {
-          setIsBulkOpen(false);
-          setBulkData('');
-          toast.success(`Successfully imported ${newItems.length} records.`);
-        },
-        onError: () => toast.error("Failed to import records")
-      });
+      const updated = [...adpList, ...newItems];
+      DataService.saveADPMaster(updated);
+      setAdpList(updated);
+      setIsBulkOpen(false);
+      setBulkData('');
     } else {
-      toast.info("No valid data found or invalid format.");
+      alert("No valid data found or invalid format.");
     }
   };
 
@@ -141,14 +129,23 @@ export const ADPMasterView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    deleteADPMaster.mutate(itemToDelete, {
-      onSuccess: () => {
-        setIsDeleteModalOpen(false);
-        setItemToDelete(null);
-        toast.success("ADP entry deleted successfully");
-      },
-      onError: () => toast.error("Failed to delete ADP entry")
-    });
+    const id = itemToDelete;
+
+    // Fetch fresh data
+    const currentMaster = DataService.getADPMaster();
+    const currentMappings = DataService.getADPMappings();
+
+    // 1. Delete Mappings related to this ADP Item
+    const updatedMappings = currentMappings.filter(m => m.adpId !== id);
+    DataService.saveADPMappings(updatedMappings);
+
+    // 2. Delete ADP Item
+    const filtered = currentMaster.filter(item => item.id !== id);
+    DataService.saveADPMaster(filtered);
+    
+    setAdpList(filtered);
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
   };
 
   // Filter Logic
@@ -170,14 +167,6 @@ export const ADPMasterView: React.FC = () => {
     estimateSize: () => 88, // Estimated height of a row in pixels
     overscan: 5,
   });
-
-  if (isLoadingADP) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="animate-spin text-slate-400" size={32} />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 flex flex-col h-[calc(100vh-8rem)]">
@@ -299,7 +288,7 @@ export const ADPMasterView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} isLoading={createADPMaster.isPending || updateADPMaster.isPending}>Save Changes</Button>
+            <Button onClick={handleSave}>Save Changes</Button>
           </>
         }
       >
@@ -344,7 +333,7 @@ export const ADPMasterView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete} isLoading={deleteADPMaster.isPending}>Delete Entry</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete Entry</Button>
           </>
         }
       >
@@ -368,7 +357,7 @@ export const ADPMasterView: React.FC = () => {
         footer={
           <>
              <Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkImport} isLoading={bulkImportADPMaster.isPending}>Import Data</Button>
+             <Button onClick={handleBulkImport}>Import Data</Button>
           </>
         }
       >

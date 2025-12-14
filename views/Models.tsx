@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { DataService } from '../services/storageService';
 import { suggestModels } from '../services/geminiService';
 import { Model, Make, VehicleType } from '../types';
 import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Sparkles, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, Upload, FileText, Search, AlertCircle, AlertTriangle } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { 
-  useModels, useMakes, useTypes, 
-  useCreateModel, useUpdateModel, useDeleteModel, useBulkImportModels 
-} from '../hooks/useVehicleData';
-import { DataService } from '../services/storageService'; // Kept for sync helpers like names if needed, though data is in hooks
 
 // Define Zod Schema
 const modelSchema = z.object({
@@ -24,15 +20,9 @@ const modelSchema = z.object({
 type ModelFormData = z.infer<typeof modelSchema>;
 
 export const ModelsView: React.FC = () => {
-  // Hooks
-  const { data: models = [], isLoading: isLoadingModels } = useModels();
-  const { data: makes = [] } = useMakes();
-  const { data: types = [] } = useTypes();
-
-  const createModel = useCreateModel();
-  const updateModel = useUpdateModel();
-  const deleteModel = useDeleteModel();
-  const bulkImportModels = useBulkImportModels();
+  const [models, setModels] = useState<Model[]>([]);
+  const [makes, setMakes] = useState<Make[]>([]);
+  const [types, setTypes] = useState<VehicleType[]>([]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -57,7 +47,7 @@ export const ModelsView: React.FC = () => {
     setValue,
     watch,
     reset,
-    formState: { errors }
+    formState: { errors, isSubmitting }
   } = useForm<ModelFormData>({
     resolver: zodResolver(modelSchema),
     defaultValues: { name: '', nameAr: '', makeId: '', typeId: '' }
@@ -65,10 +55,20 @@ export const ModelsView: React.FC = () => {
 
   const selectedMakeId = watch('makeId');
 
+  useEffect(() => {
+    refreshData();
+  }, []);
+
   // Reset page on search
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
+
+  const refreshData = () => {
+    setModels(DataService.getModels());
+    setMakes(DataService.getMakes());
+    setTypes(DataService.getTypes());
+  };
 
   const handleOpenModal = (model?: Model) => {
     setAiSuggestions([]);
@@ -100,29 +100,25 @@ export const ModelsView: React.FC = () => {
         return;
     }
 
+    let updatedModels = [...models];
+
     if (editingId) {
-      updateModel.mutate({ ...data, id: editingId } as Model, {
-        onSuccess: () => {
-          setIsModalOpen(false);
-          toast.success("Model updated successfully");
-        },
-        onError: () => toast.error("Failed to update model")
-      });
+      updatedModels = models.map(m => m.id === editingId ? { ...m, ...data, id: m.id } as Model : m);
     } else {
-      createModel.mutate({
+      const newModel: Model = {
         id: Date.now().toString(),
         name: data.name,
         nameAr: data.nameAr || '',
         makeId: data.makeId,
         typeId: data.typeId
-      }, {
-        onSuccess: () => {
-          setIsModalOpen(false);
-          toast.success("Model created successfully");
-        },
-        onError: () => toast.error("Failed to create model")
-      });
+      };
+      updatedModels.push(newModel);
     }
+
+    DataService.saveModels(updatedModels);
+    setModels(updatedModels);
+    setIsModalOpen(false);
+    toast.success(editingId ? "Model updated successfully" : "Model created successfully");
   };
 
   const initiateDelete = (id: string, e: React.MouseEvent) => {
@@ -133,14 +129,21 @@ export const ModelsView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    deleteModel.mutate(itemToDelete, {
-      onSuccess: () => {
-        setIsDeleteModalOpen(false);
-        setItemToDelete(null);
-        toast.success("Model deleted successfully");
-      },
-      onError: () => toast.error("Failed to delete model")
-    });
+    const id = itemToDelete;
+
+    // 1. Clean up Mappings
+    const allMappings = DataService.getADPMappings();
+    const updatedMappings = allMappings.filter(m => m.modelId !== id);
+    DataService.saveADPMappings(updatedMappings);
+
+    // 2. Delete Model
+    const remainingModels = models.filter(m => m.id !== id);
+    DataService.saveModels(remainingModels);
+    setModels(remainingModels);
+
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
+    toast.success("Model deleted successfully");
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -194,14 +197,12 @@ export const ModelsView: React.FC = () => {
     });
 
     if (newModels.length > 0) {
-      bulkImportModels.mutate(newModels, {
-        onSuccess: () => {
-          setIsBulkOpen(false);
-          setBulkData('');
-          toast.success(`Successfully imported ${newModels.length} models.`);
-        },
-        onError: () => toast.error("Failed to import models")
-      });
+      const updated = [...models, ...newModels];
+      DataService.saveModels(updated);
+      setModels(updated);
+      setIsBulkOpen(false);
+      setBulkData('');
+      toast.success(`Successfully imported ${newModels.length} models.`);
     } else {
       toast.info("No valid new models found. Duplicates were skipped or Make/Type names did not match.");
     }
@@ -220,10 +221,6 @@ export const ModelsView: React.FC = () => {
     setIsSuggesting(false);
   };
 
-  // Helper for names since hooks return raw lists
-  const getMakeName = (id: string) => makes.find(m => m.id === id)?.name || 'Unknown';
-  const getTypeName = (id: string) => types.find(t => t.id === id)?.name || 'Unknown';
-
   // Filter Logic
   const filteredModels = models.filter(model => {
     const make = makes.find(m => m.id === model.makeId);
@@ -239,14 +236,6 @@ export const ModelsView: React.FC = () => {
   // Pagination Logic
   const totalPages = Math.ceil(filteredModels.length / ITEMS_PER_PAGE);
   const paginatedModels = filteredModels.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  if (isLoadingModels) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="animate-spin text-slate-400" size={32} />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -303,12 +292,12 @@ export const ModelsView: React.FC = () => {
                   <TableCell>
                      <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                           {getMakeName(model.makeId).substring(0, 2).toUpperCase()}
+                           {DataService.getMakeName(model.makeId).substring(0, 2).toUpperCase()}
                         </span>
-                        {getMakeName(model.makeId)}
+                        {DataService.getMakeName(model.makeId)}
                      </div>
                   </TableCell>
-                  <TableCell>{getTypeName(model.typeId)}</TableCell>
+                  <TableCell>{DataService.getTypeName(model.typeId)}</TableCell>
                   <TableCell>
                     <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" className="p-2 h-auto" onClick={(e) => handleOpenModal(model)}>
@@ -347,7 +336,7 @@ export const ModelsView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit(onSubmit)} isLoading={createModel.isPending || updateModel.isPending}>Save Changes</Button>
+            <Button onClick={handleSubmit(onSubmit)} isLoading={isSubmitting}>Save Changes</Button>
           </>
         }
       >
@@ -426,7 +415,7 @@ export const ModelsView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete} isLoading={deleteModel.isPending}>Delete Model</Button>
+            <Button variant="danger" onClick={confirmDelete}>Delete Model</Button>
           </>
         }
       >
@@ -450,7 +439,7 @@ export const ModelsView: React.FC = () => {
         footer={
           <>
              <Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkImport} isLoading={bulkImportModels.isPending}>Import Models</Button>
+             <Button onClick={handleBulkImport}>Import Models</Button>
           </>
         }
       >

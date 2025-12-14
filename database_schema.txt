@@ -1,21 +1,25 @@
 
 -- Database Schema for SlashData Vehicle Portal
 -- Database: MySQL 8.0+
--- ---------------------------------------------------------
 
--- 1. Users Table (Auth)
+-- ---------------------------------------------------------
+-- 1. Users Table
+-- ---------------------------------------------------------
 CREATE TABLE Users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(100) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL, -- BCrypt
+    password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(100) NOT NULL,
-    role ENUM('ADMIN', 'MAPPING_ADMIN', 'MAPPING_USER') NOT NULL,
-    status ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE',
+    role ENUM('Admin', 'Mapping Admin', 'Mapping User') NOT NULL,
+    status ENUM('Active', 'Inactive') DEFAULT 'Active',
     last_active TIMESTAMP NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. Vehicle Types Table
+-- ---------------------------------------------------------
+-- 2. Vehicle Hierarchy Tables
+-- ---------------------------------------------------------
 CREATE TABLE VehicleTypes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
@@ -26,7 +30,6 @@ CREATE TABLE VehicleTypes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. Makes Table
 CREATE TABLE Makes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
@@ -35,7 +38,6 @@ CREATE TABLE Makes (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. Models Table
 CREATE TABLE Models (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     make_id BIGINT UNSIGNED NOT NULL,
@@ -50,37 +52,40 @@ CREATE TABLE Models (
     CONSTRAINT uc_models_make_name UNIQUE (make_id, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. ADP Master Data Table (Source Data - IDs are strings/codes from ADP)
+-- ---------------------------------------------------------
+-- 3. ADP Data & Mappings
+-- ---------------------------------------------------------
 CREATE TABLE ADPMaster (
-    id VARCHAR(50) PRIMARY KEY, -- ADP Unique Identifier (or composite)
-    adp_make_id VARCHAR(50),
+    id VARCHAR(100) PRIMARY KEY, -- Source System ID
+    adp_make_id VARCHAR(50) NOT NULL,
     make_en_desc VARCHAR(200),
     make_ar_desc VARCHAR(200),
-    adp_model_id VARCHAR(50),
+    adp_model_id VARCHAR(50) NOT NULL,
     model_en_desc VARCHAR(200),
     model_ar_desc VARCHAR(200),
     adp_type_id VARCHAR(50),
     type_en_desc VARCHAR(200),
     type_ar_desc VARCHAR(200),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    INDEX idx_adp_make (adp_make_id),
+    INDEX idx_adp_model (adp_model_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 6. ADP Mappings Table
--- Links ADP Master Data to SlashData Entities
 CREATE TABLE ADPMappings (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    adp_id VARCHAR(50) NOT NULL UNIQUE,
+    adp_id VARCHAR(100) NOT NULL UNIQUE,
     
-    -- Mapping Status & Targets
+    -- Status Enum matches TypeScript MappingStatus
     status ENUM('MAPPED', 'MISSING_MAKE', 'MISSING_MODEL') DEFAULT 'MAPPED',
-    model_id BIGINT UNSIGNED NULL, -- Populated if MAPPED
-    make_id BIGINT UNSIGNED NULL,  -- Populated if MISSING_MODEL (to capture Make at least)
     
-    -- Audit & Review Workflow
+    -- Foreign Keys to SlashData Entities
+    model_id BIGINT UNSIGNED NULL, -- Used if MAPPED
+    make_id BIGINT UNSIGNED NULL,  -- Used if MISSING_MODEL (to capture Make)
+    
+    -- Audit
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by BIGINT UNSIGNED,
-    
-    -- Review Columns: NULL = Pending, NOT NULL = Approved
     reviewed_at TIMESTAMP NULL DEFAULT NULL, 
     reviewed_by BIGINT UNSIGNED DEFAULT NULL,
 
@@ -88,33 +93,35 @@ CREATE TABLE ADPMappings (
     FOREIGN KEY (model_id) REFERENCES Models(id) ON DELETE SET NULL,
     FOREIGN KEY (make_id) REFERENCES Makes(id) ON DELETE SET NULL,
     FOREIGN KEY (updated_by) REFERENCES Users(id) ON DELETE SET NULL,
-    FOREIGN KEY (reviewed_by) REFERENCES Users(id) ON DELETE SET NULL
+    FOREIGN KEY (reviewed_by) REFERENCES Users(id) ON DELETE SET NULL,
+    
+    INDEX idx_status (status),
+    INDEX idx_reviewed (reviewed_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 7. ADP Make Mappings Table (Global Rules)
 CREATE TABLE ADPMakeMappings (
     adp_make_id VARCHAR(50) NOT NULL PRIMARY KEY,
     sd_make_id BIGINT UNSIGNED NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
     FOREIGN KEY (sd_make_id) REFERENCES Makes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 8. Audit History Table
+-- ---------------------------------------------------------
+-- 4. Audit History
+-- ---------------------------------------------------------
 CREATE TABLE ADPMappingHistory (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    adp_id VARCHAR(50) NOT NULL,
+    adp_id VARCHAR(100) NOT NULL,
     user_id BIGINT UNSIGNED,
     action ENUM('CREATED', 'UPDATED', 'REVIEWED', 'REJECTED') NOT NULL,
     details TEXT,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY (adp_id) REFERENCES ADPMaster(id) ON DELETE CASCADE,
-    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE SET NULL
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE SET NULL,
+    
+    -- Indexes optimized for Dashboard Analytics & Recent Activity
+    INDEX idx_history_timestamp (timestamp), -- For trend analysis & recent activity sorting
+    INDEX idx_history_user (user_id)         -- For user contribution leaderboards
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Indexes for Performance
-CREATE INDEX idx_models_make ON Models(make_id);
-CREATE INDEX idx_adp_mapping_status ON ADPMappings(status);
-CREATE INDEX idx_adp_mapping_updated ON ADPMappings(updated_at);
-CREATE INDEX idx_adp_mapping_pending ON ADPMappings(reviewed_at);
-CREATE INDEX idx_history_adp ON ADPMappingHistory(adp_id);

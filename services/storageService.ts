@@ -111,5 +111,45 @@ export const DataService = {
     });
 
     return history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  },
+
+  // Recent Activity for Dashboard
+  getRecentActivity: (limit: number = 10) => {
+    const mappings = load(K_ADP_MAPPING, INITIAL_ADP_MAPPING);
+    const master = load(K_ADP_MASTER, INITIAL_ADP_MASTER);
+    const makes = load(K_MAKES, INITIAL_MAKES);
+    const models = load(K_MODELS, INITIAL_MODELS);
+    const users = load(K_USERS, INITIAL_USERS);
+
+    return mappings
+      .filter(m => m.updatedAt)
+      .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime())
+      .slice(0, limit)
+      .map(m => {
+        const adp = master.find(a => a.id === m.adpId);
+        const user = users.find(u => u.id === m.updatedBy);
+        
+        let actionDetails = '';
+        if (m.status === 'MAPPED' && m.modelId) {
+             const model = models.find(mod => mod.id === m.modelId);
+             const make = model ? makes.find(mk => mk.id === model.makeId) : null;
+             actionDetails = `mapped to ${make?.name} ${model?.name}`;
+        } else if (m.status === 'MISSING_MODEL') {
+             actionDetails = 'flagged as Missing Model';
+        } else if (m.status === 'MISSING_MAKE') {
+             actionDetails = 'flagged as Missing Make';
+        } else {
+             actionDetails = 'updated mapping';
+        }
+
+        return {
+           id: m.id,
+           user: user?.name || 'Unknown User',
+           adp: adp ? `${adp.makeEnDesc} ${adp.modelEnDesc}` : 'Unknown Vehicle',
+           action: actionDetails,
+           time: m.updatedAt || '',
+           userRole: user?.role
+        };
+      });
   }
 };
