@@ -14,6 +14,7 @@ import {
   LogOut,
   Factory
 } from 'lucide-react';
+import { Toaster } from 'sonner';
 import { NavItem, ViewState, User } from '../types';
 
 interface LayoutProps {
@@ -109,6 +110,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onNavigat
 
   return (
     <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
+      <Toaster position="top-right" richColors closeButton />
       {/* Sidebar */}
       <aside 
         className={`${sidebarOpen ? 'w-64' : 'w-20'} 

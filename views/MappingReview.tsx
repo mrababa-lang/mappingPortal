@@ -3,6 +3,7 @@ import { DataService } from '../services/storageService';
 import { ADPMapping, ADPMaster, Model, Make } from '../types';
 import { Card, Button, TableHeader, TableHead, TableRow, TableCell, Select, Input, Pagination, Modal } from '../components/UI';
 import { CheckCircle2, Clock, UserCheck, ArrowRight, AlertTriangle, HelpCircle, Filter, X, Check, Trash2, Ban, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const MappingReviewView: React.FC = () => {
   const [reviews, setReviews] = useState<any[]>([]);
@@ -126,6 +127,7 @@ export const MappingReviewView: React.FC = () => {
 
     DataService.saveADPMappings(updatedMappings);
     refreshData();
+    toast.success("Mapping approved successfully.");
   };
 
   const handleReject = (mappingId: string) => {
@@ -136,6 +138,7 @@ export const MappingReviewView: React.FC = () => {
 
     DataService.saveADPMappings(filteredMappings);
     refreshData();
+    toast.success("Mapping rejected and removed.");
   };
 
   const handleBulkAction = () => {
@@ -160,8 +163,10 @@ export const MappingReviewView: React.FC = () => {
             }
             return m;
         });
+        toast.success(`Approved ${pendingIds.length} mappings.`);
     } else if (confirmAction.type === 'rejectAll') {
         updatedMappings = updatedMappings.filter(m => !pendingIds.includes(m.id));
+        toast.success(`Rejected ${pendingIds.length} mappings.`);
     }
 
     DataService.saveADPMappings(updatedMappings);

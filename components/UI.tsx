@@ -41,29 +41,33 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
 }
 
-export const Input: React.FC<InputProps> = ({ label, className = '', ...props }) => (
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(({ label, className = '', ...props }, ref) => (
   <div className="space-y-1.5">
     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
     <input 
+      ref={ref}
       className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-slash-red/20 focus:border-slash-red/50 transition-all ${className}`}
       {...props}
     />
   </div>
-);
+));
+Input.displayName = 'Input';
 
 // --- TextArea ---
 interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: string;
 }
-export const TextArea: React.FC<TextAreaProps> = ({ label, className = '', ...props }) => (
+export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(({ label, className = '', ...props }, ref) => (
   <div className="space-y-1.5">
     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
     <textarea 
+      ref={ref}
       className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-slash-red/20 focus:border-slash-red/50 transition-all min-h-[100px] ${className}`}
       {...props}
     />
   </div>
-);
+));
+TextArea.displayName = 'TextArea';
 
 // --- Select ---
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
@@ -71,11 +75,12 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string }[];
 }
 
-export const Select: React.FC<SelectProps> = ({ label, options, className = '', ...props }) => (
+export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ label, options, className = '', ...props }, ref) => (
   <div className="space-y-1.5">
     <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
     <div className="relative">
       <select 
+        ref={ref}
         className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-slash-red/20 focus:border-slash-red/50 transition-all appearance-none ${className}`}
         {...props}
       >
@@ -89,7 +94,8 @@ export const Select: React.FC<SelectProps> = ({ label, options, className = '', 
       </div>
     </div>
   </div>
-);
+));
+Select.displayName = 'Select';
 
 // --- Searchable Select (Combobox) ---
 interface SearchableSelectProps {

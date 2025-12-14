@@ -2,160 +2,93 @@
 # SlashData Vehicle Portal - Backend Specification
 
 ## 1. Architecture Overview
-This document outlines the backend requirements to support the SlashData Vehicle Portal using a Java stack.
+- **Framework**: Java 17+ with **Spring Boot 3.x**.
+- **Database**: **MySQL 8.0+**.
+- **Security**: Spring Security + JWT.
+- **AI**: Google Gemini API Integration.
 
-- **Framework**: Java 17 (or 21) with **Spring Boot 3.x**.
-- **Database**: **MySQL 8.0+** (InnoDB Engine).
-- **ORM**: **Spring Data JPA** (Hibernate).
-- **Authentication**: **Spring Security** with JSON Web Tokens (JWT).
-- **Build Tool**: Maven or Gradle.
-- **AI Integration**: Google Gemini API (Server-side `RestClient` or `WebClient`).
+## 2. Data Strategy & ID Generation
+- **SlashData Entities (Makes, Models, Types)**:
+  - Must use **Database Auto-Increment** (`BIGINT`).
+  - API payloads for Creation (`POST`) **must not** include an ID.
+  - API responses **must** include the generated ID.
+- **ADP Entities**:
+  - Use String IDs provided by the source system (or composite keys).
+- **Users**:
+  - Use **Database Auto-Increment** (`BIGINT`).
 
-## 2. API Standards & Conventions
+## 3. API Endpoints
 
-### 2.1 Response Structure
-To support the frontend's table components, use a standardized generic wrapper class `ApiResponse<T>`.
+### 3.1 Authentication
+- `POST /api/auth/login`: Returns `{ token: string, user: UserDTO }`. UserDTO includes numeric ID.
 
-**Pagination Response:**
-Map Spring's `Page<T>` object to the following JSON structure:
-```json
-{
-  "data": [...], // List of DTOs
-  "meta": {
-    "totalItems": 100, // page.getTotalElements()
-    "totalPages": 5,   // page.getTotalPages()
-    "currentPage": 1   // page.getNumber() + 1 (Frontend expects 1-based, Spring is 0-based)
-  }
-}
-```
+### 3.2 Vehicle Management (Auto-Increment IDs)
+#### Makes
+- `GET /api/makes`: Returns `List<MakeDTO>`.
+- `POST /api/makes`: Payload `{ name, nameAr }`. Returns `MakeDTO` (with new ID).
+- `POST /api/makes/upload`: Multipart CSV.
 
-### 2.2 Search & Filtering strategy
-- Use **Spring Data JPA Specifications** (`Specification<T>`) to handle dynamic filtering.
-- **Text Search**: Use `LIKE %value%` logic within Specifications for the `q` parameter.
-- **Sorting**: Accept `Sort` parameters (`pageable`) directly in controller methods.
+#### Models
+- `GET /api/models`: Returns `List<ModelDTO>`.
+- `POST /api/models`: Payload `{ name, nameAr, makeId(Long), typeId(Long) }`.
+- `POST /api/models/upload`: Multipart CSV.
+- **Validation**: Ensure `makeId` and `typeId` exist. Check uniqueness of `Name + MakeID`.
 
----
+#### Types
+- `GET /api/types`
+- `POST /api/types`
 
-## 3. Authentication & Security
-- **Endpoints**:
-  - `POST /api/auth/login`: Accepts `{email, password}`. Returns `{ token, user: UserDTO }`.
-- **Implementation**:
-  - Use `BCryptPasswordEncoder` for hashing.
-  - Create a custom `JwtAuthenticationFilter` to validate tokens on protected routes.
-  - **RBAC**: Use `@PreAuthorize("hasRole('ADMIN')")` annotations on Controllers.
-    - `Admin`: Full access.
-    - `Mapping Admin`: Access to ADP + Vehicle Management.
-    - `Mapping User`: Access to ADP (Read/Write) but **NO** access to Mapping Review endpoints.
+### 3.3 ADP & Mapping
+#### ADP Master
+- `GET /api/adp/master`: Searchable (Pageable).
+- `POST /api/adp/master/upload`: Multipart CSV.
 
----
-
-## 4. API Endpoints (Controller Layer)
-
-### 4.1 Dashboard & Analytics (`StatsController`)
-- `GET /api/stats/dashboard`: Aggregated counts via native SQL queries or JPA `count()` methods.
-- `GET /api/stats/activity`:
-  - Params: `dateFrom`, `dateTo`, `userId`.
-  - Use a Repository method to group `ADPMapping` updates by time intervals.
-
-### 4.2 User Management (`UserController`)
-- Restricted to `ROLE_ADMIN`.
-- Standard CRUD (`findAll`, `save`, `delete`).
-- `delete`: Soft delete is preferred (`status = 'Inactive'`), but Hard delete is acceptable if referential integrity allows.
-
-### 4.3 Vehicle Master Data
-
-#### Makes (`MakeController`)
-- `POST /api/makes`:
-  - Handle `DataIntegrityViolationException` for duplicate names.
-- `DELETE /api/makes/{id}`:
-  - **Transactional Cascade Logic**:
-    1. Find all Models by Make ID.
-    2. Update `ADPMapping` where `model_id` IN (these models) -> Set `status='MAPPED'`, `model_id=null`, `updated_at=NOW`.
-    3. Update `ADPMapping` where `make_id` = deleted Make ID -> Set `status='MAPPED'`, `make_id=null`, `updated_at=NOW`.
-    4. Delete Models.
-    5. Delete Make.
-
-#### Models (`ModelController`)
-- `DELETE /api/models/{id}`:
-  - **Transactional Logic**:
-    1. Update `ADPMapping` where `model_id` = ID -> Set `status='MAPPED'`, `model_id=null`, `updated_at=NOW`.
-    2. Delete Model.
-
-### 4.4 ADP Integration
-
-#### Master Data (`ADPMasterController`)
-- `GET /api/adp/master`: Search via Specifications.
-
-#### Mappings (`ADPMappingController`)
-- `GET /api/adp/mappings`:
-  - **Filtering (JPA Specification)**:
-    - `reviewStatus`:
-      - 'pending': `reviewedAt` IS NULL.
-      - 'reviewed': `reviewedAt` IS NOT NULL.
-    - `mappingType`: Filter by `status` column (MAPPED, MISSING_MAKE, MISSING_MODEL).
-    - `dateFrom/To`: `between` logic on `updatedAt`.
+#### Mapping Operations
+- `GET /api/adp/mappings`: Filter by status, dates.
 - `PUT /api/adp/mappings/{adpId}`:
-  - Upsert logic.
-  - **Important**: Always set `reviewedAt = null` and `reviewedBy = null` on update to force re-review.
-  
-#### Mapping Review Workflow
+  - Upsert mapping.
+  - Payload: `{ status, makeId(Long), modelId(Long) }`.
+  - **Trigger**: Insert record into `ADPMappingHistory` table (`action=UPDATED`).
+  - **Reset**: Set `reviewedAt = null` to require re-approval.
+- `GET /api/adp/mappings/{adpId}/history`:
+  - Returns `List<HistoryEntryDTO>` ordered by timestamp desc.
+
+#### Review Workflow
 - `POST /api/adp/mappings/{adpId}/approve`:
-  - Set `reviewedAt = LocalDateTime.now()`, `reviewedBy = currentUser`.
+  - Update `reviewedAt`, `reviewedBy`.
+  - Insert History (`action=REVIEWED`).
 - `DELETE /api/adp/mappings/{adpId}/reject`:
-  - Delete the record from `ADPMappings` table.
+  - Delete mapping record.
+  - Insert History (`action=REJECTED`).
 
-#### Bulk Actions (`ADPMappingBulkController`)
-- `POST /api/adp/mappings/bulk-action`:
-  - Request: `{ action: "APPROVE" | "REJECT", ids: [...] }`.
-  - **Approve**: `UPDATE ADPMappings m SET m.reviewedAt = NOW(), m.reviewedBy = ? WHERE m.id IN (?) AND m.reviewedAt IS NULL`.
-  - **Reject**: `DELETE FROM ADPMappings m WHERE m.id IN (?)`.
-  - Execute within a `@Transactional` block.
+### 3.4 AI Integration
+- `POST /api/ai/suggest-mapping`:
+  - Input: `{ description: string }`.
+  - Logic:
+    1. Fetch list of Makes/Models from DB (cached/optimized).
+    2. Call Gemini API with context.
+    3. Return `{ makeId: Long, modelId: Long, reasoning: string }`.
+- `POST /api/ai/generate-description`:
+  - Input: `{ name: string, type: "make"|"type" }`.
+  - Returns: `{ description: string }`.
 
----
+## 4. Business Logic Details
 
-## 5. Complex Business Logic
+### 4.1 Global Make Mapping
+- `POST /api/adp/makes/map`:
+  - Payload: `{ adpMakeId: string, sdMakeId: Long }`.
+  - Logic:
+    1. Save to `ADPMakeMappings`.
+    2. Async Job / Transactional Process:
+       - Find all `ADPMappings` linked to this `adpMakeId` where `status` is `MISSING_MAKE` or no mapping exists.
+       - Update them to `status=MISSING_MODEL`, `makeId=sdMakeId`.
+       - Log history for each updated record.
 
-### A. ADP Make Mapping Propagation (Service Layer)
-When creating a global make map:
-1. Find all `ADPMaster` entities by `adpMakeId`.
-2. Fetch all existing `ADPMapping` for these master records.
-3. Iterate and apply logic:
-   - If no mapping exists: Create new `ADPMapping` with `status=MISSING_MODEL` and `makeId=targetSdMakeId`.
-   - If mapping exists AND `status=MISSING_MAKE`: Update `status=MISSING_MODEL` and `makeId=targetSdMakeId`.
-4. `mappingRepository.saveAll(...)`.
+### 4.2 Audit Trail
+- Use Spring AOP or Entity Listeners (JPA `@PostPersist`, `@PostUpdate`) to automatically write to `ADPMappingHistory` whenever `ADPMappings` is modified.
+- Ensure the `currentUserId` is extracted from the Security Context.
 
-### B. Bulk Import Handling (CSV)
-
-**Technology**: Use **OpenCSV** or **Apache Commons CSV**.
-
-**Architecture for Bulk Uploads:**
-1. **Controller**: Accepts `MultipartFile`.
-2. **Service**:
-   - Reads `InputStream` from file.
-   - Parses CSV into a list of POJOs/DTOs.
-   - Performs validation (duplicates, required fields).
-   - **Transactional Batch Processing**:
-     - Do not call `repository.save()` inside a loop for 10k records.
-     - Use `repository.saveAll(batch)` (Spring Data JPA) or `JdbcTemplate` batch updates for performance.
-
-**Specific Logic (Example: Models Import):**
-1. **Pre-fetch Cache**: Load all existing Makes (`Map<String, String> nameToId`) and Types (`Map<String, String> nameToId`) into memory to avoid N+1 Selects during CSV validation.
-2. **Iterate Rows**:
-   - Clean data (trim).
-   - Lookup Make ID from map. If missing -> Add to error report list.
-   - Lookup Type ID from map. If missing -> Add to error report list.
-   - Check unique constraint (MakeID + ModelName).
-3. **Execution**:
-   - If critical errors exceed threshold, rollback and return error report.
-   - Otherwise, `modelRepository.saveAll(validModels)`.
-   - Return `{ savedCount: 50, errors: ["Line 5: Make 'X' not found"] }`.
-
----
-
-## 6. Deployment Considerations
-- **Environment Variables**:
-  - `SPRING_DATASOURCE_URL`: jdbc:mysql://localhost:3306/slashdata
-  - `SPRING_DATASOURCE_USERNAME`
-  - `SPRING_DATASOURCE_PASSWORD`
-  - `GEMINI_API_KEY`
-- **Docker**: Containerize the JAR file.
+## 5. Security Roles
+- `ADMIN`: Full access (Users, Delete operations).
+- `MAPPING_ADMIN`: Full access to Data & Mappings (Approve/Reject).
+- `MAPPING_USER`: Read Data, Propose Mappings (Update). No Approve/Reject.

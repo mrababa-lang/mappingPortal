@@ -3,6 +3,7 @@ import { User } from '../types';
 import { DataService } from '../services/storageService';
 import { Button, Input } from '../components/UI';
 import { ArrowRight, Lock, Mail, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface LoginViewProps {
   onLogin: (user: User) => void;
@@ -12,31 +13,33 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
 
     // Simulate API latency
     setTimeout(() => {
-      const users = DataService.getUsers();
-      // Mock authentication
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      try {
+        const users = DataService.getUsers();
+        // Mock authentication
+        const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-      if (user && user.status === 'Active') {
-        // Verify Password
-        if (user.password && user.password !== password) {
-          setError('Invalid credentials.');
+        if (user && user.status === 'Active') {
+          // Verify Password
+          if (user.password && user.password !== password) {
+            toast.error('Invalid credentials.');
+          } else {
+            // Success
+            onLogin(user);
+            toast.success(`Welcome back, ${user.name}`);
+          }
         } else {
-          // Success
-          onLogin(user);
+          toast.error('Invalid credentials or inactive account.');
         }
-      } else {
-        setError('Invalid credentials or inactive account.');
-        // For demo purposes, hint at valid credentials
-        if (!email) setError('Hint: admin@firsttech.ae / password');
+      } catch (error) {
+        console.error("Login Error", error);
+        toast.error("An unexpected error occurred. Please try resetting data.");
       }
       setIsLoading(false);
     }, 800);
@@ -46,6 +49,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
     if (window.confirm('This will reset all data (Users, Makes, Mappings) to the default state. Continue?')) {
       localStorage.clear();
       window.location.reload();
+      toast.success("System data reset successfully.");
     }
   };
 
@@ -67,7 +71,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               <Input 
                 label="Email Address" 
                 type="email" 
-                placeholder="name@firsttech.ae"
+                placeholder="admin@firsttech.ae"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="pl-10"
@@ -79,7 +83,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               <Input 
                 label="Password" 
                 type="password" 
-                placeholder="••••••••"
+                placeholder="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="pl-10"
@@ -87,12 +91,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               />
             </div>
           </div>
-
-          {error && (
-            <div className="p-3 rounded-lg bg-red-50 text-red-600 text-sm font-medium text-center">
-              {error}
-            </div>
-          )}
 
           <Button 
             type="submit" 
@@ -103,10 +101,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
           </Button>
 
           <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-3">
-             <p className="text-center text-xs text-slate-400">
-                Protected by enterprise-grade security. <br/>
-                Contact IT for access.
-             </p>
+             <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-center w-full">
+               <p className="text-xs text-indigo-800 font-semibold mb-1">Demo Credentials</p>
+               <p className="text-xs text-indigo-600 font-mono">admin@firsttech.ae / password</p>
+             </div>
              
              <button 
                type="button"

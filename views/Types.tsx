@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/storageService';
 import { generateDescription } from '../services/geminiService';
 import { VehicleType } from '../types';
 import { Card, Button, Input, TextArea, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { useTypes, useCreateType, useUpdateType, useDeleteType, useBulkImportTypes } from '../hooks/useVehicleData';
+import { toast } from 'sonner';
 
 export const TypesView: React.FC = () => {
-  const [types, setTypes] = useState<VehicleType[]>([]);
+  // Hooks
+  const { data: types = [], isLoading: isLoadingTypes } = useTypes();
+  const createType = useCreateType();
+  const updateType = useUpdateType();
+  const deleteType = useDeleteType();
+  const bulkImportTypes = useBulkImportTypes();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -27,18 +34,10 @@ export const TypesView: React.FC = () => {
   // Bulk State
   const [bulkData, setBulkData] = useState('');
 
-  useEffect(() => {
-    refreshData();
-  }, []);
-
   // Reset page on search
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
-
-  const refreshData = () => {
-    setTypes(DataService.getTypes());
-  };
 
   const handleOpenModal = (type?: VehicleType) => {
     if (type) {
@@ -52,25 +51,34 @@ export const TypesView: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!formData.name) return;
+    if (!formData.name) {
+      toast.error("Type name is required.");
+      return;
+    }
 
-    let updatedTypes;
     if (editingId) {
-      updatedTypes = types.map(t => t.id === editingId ? { ...t, ...formData } as VehicleType : t);
+      updateType.mutate({ ...formData, id: editingId } as VehicleType, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("Type updated successfully");
+        },
+        onError: () => toast.error("Failed to update type")
+      });
     } else {
-      const newType: VehicleType = {
+      createType.mutate({
         id: Date.now().toString(),
         name: formData.name!,
         nameAr: formData.nameAr || '',
         description: formData.description || '',
         descriptionAr: formData.descriptionAr || ''
-      };
-      updatedTypes = [...types, newType];
+      }, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("Type created successfully");
+        },
+        onError: () => toast.error("Failed to create type")
+      });
     }
-    
-    DataService.saveTypes(updatedTypes);
-    setTypes(updatedTypes);
-    setIsModalOpen(false);
   };
   
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -109,13 +117,16 @@ export const TypesView: React.FC = () => {
     });
 
     if (newTypes.length > 0) {
-      const updatedTypes = [...types, ...newTypes];
-      DataService.saveTypes(updatedTypes);
-      setTypes(updatedTypes);
-      setIsBulkOpen(false);
-      setBulkData('');
+      bulkImportTypes.mutate(newTypes, {
+        onSuccess: () => {
+          setIsBulkOpen(false);
+          setBulkData('');
+          toast.success(`Successfully imported ${newTypes.length} types.`);
+        },
+        onError: () => toast.error("Failed to import types")
+      });
     } else {
-      alert("No valid data found.");
+      toast.info("No valid data found.");
     }
   };
 
@@ -127,19 +138,19 @@ export const TypesView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    const id = itemToDelete;
-
-    const filtered = types.filter(t => t.id !== id);
-    DataService.saveTypes(filtered);
-    setTypes(filtered);
-
-    setIsDeleteModalOpen(false);
-    setItemToDelete(null);
+    deleteType.mutate(itemToDelete, {
+      onSuccess: () => {
+        setIsDeleteModalOpen(false);
+        setItemToDelete(null);
+        toast.success("Type deleted successfully");
+      },
+      onError: () => toast.error("Failed to delete type")
+    });
   };
 
   const handleAIGenerate = async () => {
     if (!formData.name) {
-      alert("Please enter a name first.");
+      toast.error("Please enter a name first.");
       return;
     }
     setIsGenerating(true);
@@ -158,6 +169,14 @@ export const TypesView: React.FC = () => {
   // Pagination Logic
   const totalPages = Math.ceil(filteredTypes.length / ITEMS_PER_PAGE);
   const paginatedTypes = filteredTypes.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  if (isLoadingTypes) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="animate-spin text-slate-400" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -254,7 +273,7 @@ export const TypesView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave}>Save Changes</Button>
+            <Button onClick={handleSave} isLoading={createType.isPending || updateType.isPending}>Save Changes</Button>
           </>
         }
       >
@@ -312,7 +331,7 @@ export const TypesView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete}>Delete Type</Button>
+            <Button variant="danger" onClick={confirmDelete} isLoading={deleteType.isPending}>Delete Type</Button>
           </>
         }
       >
@@ -336,7 +355,7 @@ export const TypesView: React.FC = () => {
         footer={
           <>
              <Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkImport}>Import Types</Button>
+             <Button onClick={handleBulkImport} isLoading={bulkImportTypes.isPending}>Import Types</Button>
           </>
         }
       >

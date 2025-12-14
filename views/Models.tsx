@@ -1,14 +1,38 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/storageService';
 import { suggestModels } from '../services/geminiService';
 import { Model, Make, VehicleType } from '../types';
 import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Sparkles, Upload, FileText, Search, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Sparkles, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
+import { 
+  useModels, useMakes, useTypes, 
+  useCreateModel, useUpdateModel, useDeleteModel, useBulkImportModels 
+} from '../hooks/useVehicleData';
+import { DataService } from '../services/storageService'; // Kept for sync helpers like names if needed, though data is in hooks
+
+// Define Zod Schema
+const modelSchema = z.object({
+  makeId: z.string().min(1, "Manufacturer (Make) is required."),
+  typeId: z.string().min(1, "Vehicle Type is required."),
+  name: z.string().min(1, "Model Name is required."),
+  nameAr: z.string().optional(),
+});
+
+type ModelFormData = z.infer<typeof modelSchema>;
 
 export const ModelsView: React.FC = () => {
-  const [models, setModels] = useState<Model[]>([]);
-  const [makes, setMakes] = useState<Make[]>([]);
-  const [types, setTypes] = useState<VehicleType[]>([]);
+  // Hooks
+  const { data: models = [], isLoading: isLoadingModels } = useModels();
+  const { data: makes = [] } = useMakes();
+  const { data: types = [] } = useTypes();
+
+  const createModel = useCreateModel();
+  const updateModel = useUpdateModel();
+  const deleteModel = useDeleteModel();
+  const bulkImportModels = useBulkImportModels();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -17,85 +41,88 @@ export const ModelsView: React.FC = () => {
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const ITEMS_PER_PAGE = 20;
 
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
-
-  // Form State
-  const [formData, setFormData] = useState<Partial<Model>>({ 
-    name: '', nameAr: '', makeId: '', typeId: '' 
-  });
   
   // Bulk State
   const [bulkData, setBulkData] = useState('');
 
-  useEffect(() => {
-    refreshData();
-  }, []);
+  // Form Setup
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors }
+  } = useForm<ModelFormData>({
+    resolver: zodResolver(modelSchema),
+    defaultValues: { name: '', nameAr: '', makeId: '', typeId: '' }
+  });
+
+  const selectedMakeId = watch('makeId');
 
   // Reset page on search
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  const refreshData = () => {
-    setModels(DataService.getModels());
-    setMakes(DataService.getMakes());
-    setTypes(DataService.getTypes());
-  };
-
   const handleOpenModal = (model?: Model) => {
-    setError(null);
     setAiSuggestions([]);
     if (model) {
       setEditingId(model.id);
-      setFormData(model);
+      reset({
+        makeId: model.makeId,
+        typeId: model.typeId,
+        name: model.name,
+        nameAr: model.nameAr || ''
+      });
     } else {
       setEditingId(null);
-      setFormData({ name: '', nameAr: '', makeId: '', typeId: '' });
+      reset({ name: '', nameAr: '', makeId: '', typeId: '' });
     }
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
-    setError(null);
-    if (!formData.makeId) { setError("Manufacturer (Make) is required."); return; }
-    if (!formData.typeId) { setError("Vehicle Type is required."); return; }
-    if (!formData.name) { setError("Model Name is required."); return; }
-
+  const onSubmit = (data: ModelFormData) => {
     // Validation: Check for duplicates (Make + Model combination)
     const duplicate = models.find(m => 
-        m.makeId === formData.makeId &&
-        m.name.trim().toLowerCase() === formData.name!.trim().toLowerCase() &&
+        m.makeId === data.makeId &&
+        m.name.trim().toLowerCase() === data.name.trim().toLowerCase() &&
         m.id !== editingId
     );
 
     if (duplicate) {
-        setError(`This model already exists for the selected manufacturer.`);
+        toast.error(`This model already exists for the selected manufacturer.`);
         return;
     }
 
-    let updatedModels = [...models];
-
     if (editingId) {
-      updatedModels = models.map(m => m.id === editingId ? { ...m, ...formData } as Model : m);
+      updateModel.mutate({ ...data, id: editingId } as Model, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("Model updated successfully");
+        },
+        onError: () => toast.error("Failed to update model")
+      });
     } else {
-      const newModel: Model = {
+      createModel.mutate({
         id: Date.now().toString(),
-        name: formData.name!,
-        nameAr: formData.nameAr || '',
-        makeId: formData.makeId!,
-        typeId: formData.typeId!
-      };
-      updatedModels.push(newModel);
+        name: data.name,
+        nameAr: data.nameAr || '',
+        makeId: data.makeId,
+        typeId: data.typeId
+      }, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("Model created successfully");
+        },
+        onError: () => toast.error("Failed to create model")
+      });
     }
-
-    DataService.saveModels(updatedModels);
-    setModels(updatedModels);
-    setIsModalOpen(false);
   };
 
   const initiateDelete = (id: string, e: React.MouseEvent) => {
@@ -106,20 +133,14 @@ export const ModelsView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    const id = itemToDelete;
-
-    // 1. Clean up Mappings
-    const allMappings = DataService.getADPMappings();
-    const updatedMappings = allMappings.filter(m => m.modelId !== id);
-    DataService.saveADPMappings(updatedMappings);
-
-    // 2. Delete Model
-    const remainingModels = models.filter(m => m.id !== id);
-    DataService.saveModels(remainingModels);
-    setModels(remainingModels);
-
-    setIsDeleteModalOpen(false);
-    setItemToDelete(null);
+    deleteModel.mutate(itemToDelete, {
+      onSuccess: () => {
+        setIsDeleteModalOpen(false);
+        setItemToDelete(null);
+        toast.success("Model deleted successfully");
+      },
+      onError: () => toast.error("Failed to delete model")
+    });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -173,28 +194,35 @@ export const ModelsView: React.FC = () => {
     });
 
     if (newModels.length > 0) {
-      const updated = [...models, ...newModels];
-      DataService.saveModels(updated);
-      setModels(updated);
-      setIsBulkOpen(false);
-      setBulkData('');
+      bulkImportModels.mutate(newModels, {
+        onSuccess: () => {
+          setIsBulkOpen(false);
+          setBulkData('');
+          toast.success(`Successfully imported ${newModels.length} models.`);
+        },
+        onError: () => toast.error("Failed to import models")
+      });
     } else {
-      alert("No valid new models found. Duplicates were skipped or Make/Type names did not match.");
+      toast.info("No valid new models found. Duplicates were skipped or Make/Type names did not match.");
     }
   };
 
   const handleAISuggest = async () => {
-    const make = makes.find(m => m.id === formData.makeId);
+    const make = makes.find(m => m.id === selectedMakeId);
     if (!make) {
-      setError("Please select a Make first.");
+      toast.error("Please select a Make first.");
       return;
     }
-    setError(null);
+    
     setIsSuggesting(true);
     const suggestions = await suggestModels(make.name);
     setAiSuggestions(suggestions);
     setIsSuggesting(false);
   };
+
+  // Helper for names since hooks return raw lists
+  const getMakeName = (id: string) => makes.find(m => m.id === id)?.name || 'Unknown';
+  const getTypeName = (id: string) => types.find(t => t.id === id)?.name || 'Unknown';
 
   // Filter Logic
   const filteredModels = models.filter(model => {
@@ -211,6 +239,14 @@ export const ModelsView: React.FC = () => {
   // Pagination Logic
   const totalPages = Math.ceil(filteredModels.length / ITEMS_PER_PAGE);
   const paginatedModels = filteredModels.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  if (isLoadingModels) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="animate-spin text-slate-400" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -267,12 +303,12 @@ export const ModelsView: React.FC = () => {
                   <TableCell>
                      <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                           {DataService.getMakeName(model.makeId).substring(0, 2).toUpperCase()}
+                           {getMakeName(model.makeId).substring(0, 2).toUpperCase()}
                         </span>
-                        {DataService.getMakeName(model.makeId)}
+                        {getMakeName(model.makeId)}
                      </div>
                   </TableCell>
-                  <TableCell>{DataService.getTypeName(model.typeId)}</TableCell>
+                  <TableCell>{getTypeName(model.typeId)}</TableCell>
                   <TableCell>
                     <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" className="p-2 h-auto" onClick={(e) => handleOpenModal(model)}>
@@ -311,41 +347,38 @@ export const ModelsView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave}>Save Changes</Button>
+            <Button onClick={handleSubmit(onSubmit)} isLoading={createModel.isPending || updateModel.isPending}>Save Changes</Button>
           </>
         }
       >
         <div className="space-y-4">
-          {error && (
-            <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-center gap-2 border border-red-100">
-              <AlertCircle size={16} className="shrink-0" />
-              {error}
-            </div>
-          )}
-
-          <Select 
-            label="Manufacturer (Make)"
-            value={formData.makeId}
-            onChange={e => setFormData({...formData, makeId: e.target.value})}
-            options={makes.map(m => ({ value: m.id, label: m.name }))}
-          />
+          <div>
+            <Select 
+              label="Manufacturer (Make)"
+              options={makes.map(m => ({ value: m.id, label: m.name }))}
+              {...register('makeId')}
+            />
+            {errors.makeId && <p className="text-red-500 text-xs mt-1 ml-1">{errors.makeId.message}</p>}
+          </div>
           
-          <Select 
-            label="Vehicle Type"
-            value={formData.typeId}
-            onChange={e => setFormData({...formData, typeId: e.target.value})}
-            options={types.map(t => ({ value: t.id, label: t.name }))}
-          />
+          <div>
+            <Select 
+              label="Vehicle Type"
+              options={types.map(t => ({ value: t.id, label: t.name }))}
+              {...register('typeId')}
+            />
+             {errors.typeId && <p className="text-red-500 text-xs mt-1 ml-1">{errors.typeId.message}</p>}
+          </div>
 
           <div className="space-y-2">
              <div className="flex items-end gap-2">
                <div className="flex-1">
                  <Input 
                    label="Model Name (En)" 
-                   value={formData.name} 
-                   onChange={e => setFormData({...formData, name: e.target.value})}
                    placeholder="e.g. Corolla"
+                   {...register('name')}
                  />
+                 {errors.name && <p className="text-red-500 text-xs mt-1 ml-1">{errors.name.message}</p>}
                </div>
                <Button 
                  variant="ai" 
@@ -360,10 +393,9 @@ export const ModelsView: React.FC = () => {
              </div>
              <Input 
                 label="Model Name (Ar)" 
-                value={formData.nameAr} 
-                onChange={e => setFormData({...formData, nameAr: e.target.value})}
                 placeholder="كورولا"
                 dir="rtl"
+                {...register('nameAr')}
               />
              
              {/* AI Suggestions Chips */}
@@ -374,7 +406,7 @@ export const ModelsView: React.FC = () => {
                    <button 
                      key={s} 
                      type="button"
-                     onClick={() => setFormData({...formData, name: s})}
+                     onClick={() => setValue('name', s, { shouldValidate: true })}
                      className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 text-xs border border-indigo-100 hover:bg-indigo-100 transition-colors"
                    >
                      {s}
@@ -394,7 +426,7 @@ export const ModelsView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete}>Delete Model</Button>
+            <Button variant="danger" onClick={confirmDelete} isLoading={deleteModel.isPending}>Delete Model</Button>
           </>
         }
       >
@@ -418,7 +450,7 @@ export const ModelsView: React.FC = () => {
         footer={
           <>
              <Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkImport}>Import Models</Button>
+             <Button onClick={handleBulkImport} isLoading={bulkImportModels.isPending}>Import Models</Button>
           </>
         }
       >

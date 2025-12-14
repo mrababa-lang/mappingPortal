@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/storageService';
-import { Make, Model, VehicleType } from '../types';
+import { Make, VehicleType } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { useMakes, useModels, useTypes, useCreateMake, useUpdateMake, useDeleteMake, useBulkImportMakes } from '../hooks/useVehicleData';
+import { toast } from 'sonner';
 
 export const MakesView: React.FC = () => {
-  const [makes, setMakes] = useState<Make[]>([]);
-  const [models, setModels] = useState<Model[]>([]);
-  const [types, setTypes] = useState<VehicleType[]>([]);
+  const { data: makes = [], isLoading: isLoadingMakes } = useMakes();
+  const { data: models = [] } = useModels();
+  const { data: types = [] } = useTypes();
   
+  const createMake = useCreateMake();
+  const updateMake = useUpdateMake();
+  const deleteMake = useDeleteMake();
+  const bulkImportMakes = useBulkImportMakes();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   
@@ -19,7 +25,6 @@ export const MakesView: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const [error, setError] = useState<string | null>(null);
   const ITEMS_PER_PAGE = 20;
   
   // Form State
@@ -28,23 +33,12 @@ export const MakesView: React.FC = () => {
   // Bulk State
   const [bulkData, setBulkData] = useState('');
 
-  useEffect(() => {
-    refreshData();
-  }, []);
-
   // Reset page on search
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery]);
 
-  const refreshData = () => {
-    setMakes(DataService.getMakes());
-    setModels(DataService.getModels());
-    setTypes(DataService.getTypes());
-  };
-
   const handleOpenModal = (make?: Make) => {
-    setError(null);
     if (make) {
       setEditingId(make.id);
       setFormData(make);
@@ -56,9 +50,8 @@ export const MakesView: React.FC = () => {
   };
 
   const handleSave = () => {
-    setError(null);
     if (!formData.name) {
-        setError("Make name is required.");
+        toast.error("Make name is required.");
         return;
     }
 
@@ -69,26 +62,31 @@ export const MakesView: React.FC = () => {
     );
 
     if (duplicate) {
-        setError(`A manufacturer with the name "${formData.name}" already exists.`);
+        toast.error(`A manufacturer with the name "${formData.name}" already exists.`);
         return;
     }
 
-    let updatedMakes = [...makes];
-
     if (editingId) {
-      updatedMakes = makes.map(m => m.id === editingId ? { ...m, ...formData } as Make : m);
+      updateMake.mutate({ ...formData, id: editingId } as Make, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("Make updated successfully");
+        },
+        onError: () => toast.error("Failed to update make")
+      });
     } else {
-      const newMake: Make = {
+      createMake.mutate({
         id: Date.now().toString(),
         name: formData.name!,
         nameAr: formData.nameAr || ''
-      };
-      updatedMakes.push(newMake);
+      }, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("Make created successfully");
+        },
+        onError: () => toast.error("Failed to create make")
+      });
     }
-
-    DataService.saveMakes(updatedMakes);
-    setMakes(updatedMakes); // Immediate Update
-    setIsModalOpen(false);
   };
 
   const initiateDelete = (id: string, e: React.MouseEvent) => {
@@ -99,33 +97,14 @@ export const MakesView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    const id = itemToDelete;
-
-    // 1. Delete associated Models
-    const allModels = DataService.getModels();
-    const modelsToDelete = allModels.filter(m => m.makeId === id);
-    const modelIdsToDelete = new Set(modelsToDelete.map(m => m.id));
-    const remainingModels = allModels.filter(m => m.makeId !== id);
-    DataService.saveModels(remainingModels);
-    setModels(remainingModels);
-
-    // 2. Clean up Mappings (Remove mappings referencing deleted models or this make)
-    const allMappings = DataService.getADPMappings();
-    const updatedMappings = allMappings.filter(m => {
-        // Keep mapping only if it DOES NOT link to a deleted model AND DOES NOT link to this make
-        const linksToDeletedModel = m.modelId && modelIdsToDelete.has(m.modelId);
-        const linksToDeletedMake = m.makeId === id;
-        return !linksToDeletedModel && !linksToDeletedMake;
+    deleteMake.mutate(itemToDelete, {
+      onSuccess: () => {
+        setIsDeleteModalOpen(false);
+        setItemToDelete(null);
+        toast.success("Make deleted successfully");
+      },
+      onError: () => toast.error("Failed to delete make")
     });
-    DataService.saveADPMappings(updatedMappings);
-
-    // 3. Delete Make
-    const remainingMakes = makes.filter(m => m.id !== id);
-    DataService.saveMakes(remainingMakes);
-    setMakes(remainingMakes);
-    
-    setIsDeleteModalOpen(false);
-    setItemToDelete(null);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,13 +150,16 @@ export const MakesView: React.FC = () => {
     });
 
     if (newMakes.length > 0) {
-      const updated = [...makes, ...newMakes];
-      DataService.saveMakes(updated);
-      setMakes(updated);
-      setIsBulkOpen(false);
-      setBulkData('');
+      bulkImportMakes.mutate(newMakes, {
+        onSuccess: () => {
+          setIsBulkOpen(false);
+          setBulkData('');
+          toast.success(`Successfully imported ${newMakes.length} makes.`);
+        },
+        onError: () => toast.error("Failed to import makes")
+      });
     } else {
-      alert("No valid new data found. Duplicates were skipped.");
+      toast.info("No valid new data found. Duplicates were skipped.");
     }
   };
 
@@ -192,6 +174,14 @@ export const MakesView: React.FC = () => {
   // Pagination Logic
   const totalPages = Math.ceil(filteredMakes.length / ITEMS_PER_PAGE);
   const paginatedMakes = filteredMakes.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  if (isLoadingMakes) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="animate-spin text-slate-400" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -308,25 +298,16 @@ export const MakesView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave}>Save Changes</Button>
+            <Button onClick={handleSave} isLoading={createMake.isPending || updateMake.isPending}>Save Changes</Button>
           </>
         }
       >
         <div className="space-y-4">
-          {error && (
-            <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-center gap-2 border border-red-100">
-              <AlertCircle size={16} className="shrink-0" />
-              {error}
-            </div>
-          )}
           <div className="grid grid-cols-1 gap-4">
              <Input 
                 label="Make Name (English)" 
                 value={formData.name} 
-                onChange={e => {
-                    setFormData({...formData, name: e.target.value});
-                    setError(null);
-                }}
+                onChange={e => setFormData({...formData, name: e.target.value})}
                 placeholder="e.g. Toyota"
               />
               <Input 
@@ -348,7 +329,7 @@ export const MakesView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete}>Delete Permanently</Button>
+            <Button variant="danger" onClick={confirmDelete} isLoading={deleteMake.isPending}>Delete Permanently</Button>
           </>
         }
       >
@@ -372,7 +353,7 @@ export const MakesView: React.FC = () => {
         footer={
           <>
              <Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkImport}>Import Makes</Button>
+             <Button onClick={handleBulkImport} isLoading={bulkImportMakes.isPending}>Import Makes</Button>
           </>
         }
       >

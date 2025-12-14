@@ -3,50 +3,56 @@
 -- Database: MySQL 8.0+
 -- ---------------------------------------------------------
 
--- 1. Users Table
+-- 1. Users Table (Auth)
 CREATE TABLE Users (
-    id VARCHAR(36) PRIMARY KEY, -- UUID
-    name VARCHAR(100) NOT NULL,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(100) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL, -- BCrypt Hash
-    role VARCHAR(20) NOT NULL, -- Enum handled by app logic or CHECK
-    status VARCHAR(20) DEFAULT 'Active',
-    last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT chk_user_role CHECK (role IN ('Admin', 'Mapping Admin', 'Mapping User')),
-    CONSTRAINT chk_user_status CHECK (status IN ('Active', 'Inactive'))
+    password_hash VARCHAR(255) NOT NULL, -- BCrypt
+    full_name VARCHAR(100) NOT NULL,
+    role ENUM('ADMIN', 'MAPPING_ADMIN', 'MAPPING_USER') NOT NULL,
+    status ENUM('ACTIVE', 'INACTIVE') DEFAULT 'ACTIVE',
+    last_active TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. Vehicle Types Table
 CREATE TABLE VehicleTypes (
-    id VARCHAR(36) PRIMARY KEY,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     name_ar VARCHAR(100),
     description TEXT,
-    description_ar TEXT
+    description_ar TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. Makes Table
 CREATE TABLE Makes (
-    id VARCHAR(36) PRIMARY KEY,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
-    name_ar VARCHAR(100)
+    name_ar VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. Models Table
 CREATE TABLE Models (
-    id VARCHAR(36) PRIMARY KEY,
-    make_id VARCHAR(36) NOT NULL,
-    type_id VARCHAR(36) NOT NULL,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    make_id BIGINT UNSIGNED NOT NULL,
+    type_id BIGINT UNSIGNED NOT NULL,
     name VARCHAR(100) NOT NULL,
     name_ar VARCHAR(100),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
     FOREIGN KEY (make_id) REFERENCES Makes(id) ON DELETE CASCADE,
     FOREIGN KEY (type_id) REFERENCES VehicleTypes(id) ON DELETE RESTRICT,
     CONSTRAINT uc_models_make_name UNIQUE (make_id, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 5. ADP Master Data Table
+-- 5. ADP Master Data Table (Source Data - IDs are strings/codes from ADP)
 CREATE TABLE ADPMaster (
-    id VARCHAR(36) PRIMARY KEY,
+    id VARCHAR(50) PRIMARY KEY, -- ADP Unique Identifier (or composite)
     adp_make_id VARCHAR(50),
     make_en_desc VARCHAR(200),
     make_ar_desc VARCHAR(200),
@@ -55,31 +61,29 @@ CREATE TABLE ADPMaster (
     model_ar_desc VARCHAR(200),
     adp_type_id VARCHAR(50),
     type_en_desc VARCHAR(200),
-    type_ar_desc VARCHAR(200)
+    type_ar_desc VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. ADP Mappings Table
--- Records represent "Proposed" or "Approved" mappings.
--- Rejection deletes the record.
+-- Links ADP Master Data to SlashData Entities
 CREATE TABLE ADPMappings (
-    id VARCHAR(36) PRIMARY KEY,
-    adp_id VARCHAR(36) NOT NULL UNIQUE,
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    adp_id VARCHAR(50) NOT NULL UNIQUE,
     
-    -- Mapping Targets
-    status VARCHAR(50) DEFAULT 'MAPPED',
-    model_id VARCHAR(36), -- Populated if MAPPED
-    make_id VARCHAR(36),  -- Populated if MISSING_MODEL
+    -- Mapping Status & Targets
+    status ENUM('MAPPED', 'MISSING_MAKE', 'MISSING_MODEL') DEFAULT 'MAPPED',
+    model_id BIGINT UNSIGNED NULL, -- Populated if MAPPED
+    make_id BIGINT UNSIGNED NULL,  -- Populated if MISSING_MODEL (to capture Make at least)
     
     -- Audit & Review Workflow
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    updated_by VARCHAR(36),
+    updated_by BIGINT UNSIGNED,
     
     -- Review Columns: NULL = Pending, NOT NULL = Approved
     reviewed_at TIMESTAMP NULL DEFAULT NULL, 
-    reviewed_by VARCHAR(36) DEFAULT NULL,
+    reviewed_by BIGINT UNSIGNED DEFAULT NULL,
 
-    -- Constraints
-    CONSTRAINT chk_map_status CHECK (status IN ('MAPPED', 'MISSING_MAKE', 'MISSING_MODEL')),
     FOREIGN KEY (adp_id) REFERENCES ADPMaster(id) ON DELETE CASCADE,
     FOREIGN KEY (model_id) REFERENCES Models(id) ON DELETE SET NULL,
     FOREIGN KEY (make_id) REFERENCES Makes(id) ON DELETE SET NULL,
@@ -87,17 +91,30 @@ CREATE TABLE ADPMappings (
     FOREIGN KEY (reviewed_by) REFERENCES Users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 7. ADP Make Mappings Table
+-- 7. ADP Make Mappings Table (Global Rules)
 CREATE TABLE ADPMakeMappings (
     adp_make_id VARCHAR(50) NOT NULL PRIMARY KEY,
-    sd_make_id VARCHAR(36) NOT NULL,
+    sd_make_id BIGINT UNSIGNED NOT NULL,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (sd_make_id) REFERENCES Makes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 8. Audit History Table
+CREATE TABLE ADPMappingHistory (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    adp_id VARCHAR(50) NOT NULL,
+    user_id BIGINT UNSIGNED,
+    action ENUM('CREATED', 'UPDATED', 'REVIEWED', 'REJECTED') NOT NULL,
+    details TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (adp_id) REFERENCES ADPMaster(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Indexes for Performance
 CREATE INDEX idx_models_make ON Models(make_id);
 CREATE INDEX idx_adp_mapping_status ON ADPMappings(status);
 CREATE INDEX idx_adp_mapping_updated ON ADPMappings(updated_at);
--- Review workflow index: fast lookup of pending items
 CREATE INDEX idx_adp_mapping_pending ON ADPMappings(reviewed_at);
+CREATE INDEX idx_history_adp ON ADPMappingHistory(adp_id);

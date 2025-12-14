@@ -1,19 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/storageService';
-import { ADPMapping, Model, ADPMaster, Make, MappingStatus } from '../types';
+import { suggestMapping } from '../services/geminiService';
+import { ADPMapping, ADPMaster, MappingStatus } from '../types';
 import { Card, Button, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Input, Pagination, SearchableSelect } from '../components/UI';
-import { Edit2, Link, Unlink, AlertCircle, CheckCircle2, Filter, X, Download, HelpCircle, AlertTriangle, Search } from 'lucide-react';
+import { Edit2, Link, Unlink, AlertCircle, CheckCircle2, Filter, X, Download, HelpCircle, AlertTriangle, Search, History, Loader2 } from 'lucide-react';
+import { HistoryModal } from '../components/HistoryModal';
+import { toast } from 'sonner';
+import { useADPMaster, useADPMappings, useModels, useMakes, useSaveADPMappings } from '../hooks/useVehicleData';
+import { DataService } from '../services/storageService'; // Keeping for UI helper functions like getUserName
 
 export const ADPMappingView: React.FC = () => {
-  const [adpList, setAdpList] = useState<ADPMaster[]>([]);
-  const [mappings, setMappings] = useState<ADPMapping[]>([]);
-  const [models, setModels] = useState<Model[]>([]);
-  const [makes, setMakes] = useState<Make[]>([]);
+  // Hooks
+  const { data: adpList = [], isLoading: isLoadingADP } = useADPMaster();
+  const { data: mappings = [], isLoading: isLoadingMappings } = useADPMappings();
+  const { data: models = [], isLoading: isLoadingModels } = useModels();
+  const { data: makes = [], isLoading: isLoadingMakes } = useMakes();
+  const saveMappingsMutation = useSaveADPMappings();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAdpItem, setEditingAdpItem] = useState<ADPMaster | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 20;
+
+  // History Modal State
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyAdpId, setHistoryAdpId] = useState<string | null>(null);
 
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -29,22 +39,12 @@ export const ADPMappingView: React.FC = () => {
   const [mappingType, setMappingType] = useState<MappingStatus>('MAPPED');
   const [selectedMakeId, setSelectedMakeId] = useState<string>('');
   const [selectedModelId, setSelectedModelId] = useState<string>('');
-
-  useEffect(() => {
-    refreshData();
-  }, []);
+  const [isSuggesting, setIsSuggesting] = useState(false);
 
   // Reset pagination when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [dateFrom, dateTo, statusFilter, searchQuery]);
-
-  const refreshData = () => {
-    setAdpList(DataService.getADPMaster());
-    setMappings(DataService.getADPMappings());
-    setModels(DataService.getModels());
-    setMakes(DataService.getMakes());
-  };
 
   const getMappingForAdp = (adpId: string) => {
     return mappings.find(m => m.adpId === adpId);
@@ -142,9 +142,13 @@ export const ADPMappingView: React.FC = () => {
       newMappings.push(mappingData);
     }
 
-    DataService.saveADPMappings(newMappings);
-    setMappings(newMappings); // Immediate Update
-    setIsModalOpen(false);
+    saveMappingsMutation.mutate(newMappings, {
+      onSuccess: () => {
+        setIsModalOpen(false);
+        toast.success("Mapping saved successfully");
+      },
+      onError: () => toast.error("Failed to save mapping")
+    });
   };
 
   const initiateDelete = (adpId: string, e: React.MouseEvent) => {
@@ -158,11 +162,46 @@ export const ADPMappingView: React.FC = () => {
     const adpId = itemToDelete;
 
     const filtered = mappings.filter(m => m.adpId !== adpId);
-    DataService.saveADPMappings(filtered);
-    setMappings(filtered); 
+    saveMappingsMutation.mutate(filtered, {
+      onSuccess: () => {
+        setIsDeleteModalOpen(false);
+        setItemToDelete(null);
+        toast.success("Mapping removed");
+      },
+      onError: () => toast.error("Failed to remove mapping")
+    });
+  };
 
-    setIsDeleteModalOpen(false);
-    setItemToDelete(null);
+  const handleAISuggest = async () => {
+    if (!editingAdpItem) return;
+    
+    const description = `${editingAdpItem.makeEnDesc} ${editingAdpItem.modelEnDesc} (${editingAdpItem.typeEnDesc})`;
+    
+    setIsSuggesting(true);
+    const suggestion = await suggestMapping(description);
+    setIsSuggesting(false);
+
+    if (suggestion) {
+      if (suggestion.makeId) setSelectedMakeId(suggestion.makeId);
+      if (suggestion.modelId) {
+        setSelectedModelId(suggestion.modelId);
+        setMappingType('MAPPED');
+      } else if (suggestion.makeId) {
+        setMappingType('MISSING_MODEL');
+      }
+      
+      toast.success("AI Suggestion Applied", {
+        description: suggestion.reasoning || "Matched based on description similarity."
+      });
+    } else {
+      toast.info("AI could not find a confident match.");
+    }
+  };
+
+  const openHistory = (adpId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setHistoryAdpId(adpId);
+    setIsHistoryOpen(true);
   };
 
   // Filter models based on selected make
@@ -316,6 +355,16 @@ export const ADPMappingView: React.FC = () => {
   const totalPages = Math.ceil(filteredAdpList.length / ITEMS_PER_PAGE);
   const paginatedList = filteredAdpList.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+  const isLoading = isLoadingADP || isLoadingMappings || isLoadingModels || isLoadingMakes;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="animate-spin text-slate-400" size={32} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
@@ -466,6 +515,14 @@ export const ADPMappingView: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Button 
+                           variant="ghost" 
+                           className="p-2 h-auto text-slate-500 hover:text-indigo-600"
+                           onClick={(e) => openHistory(adpItem.id, e)}
+                           title="Audit History"
+                        >
+                          <History size={16} />
+                        </Button>
                         <Button variant="ghost" className="p-2 h-auto text-indigo-600 hover:bg-indigo-50" onClick={(e) => { e.stopPropagation(); handleOpenModal(adpItem); }}>
                           <Edit2 size={16} />
                         </Button>
@@ -506,6 +563,7 @@ export const ADPMappingView: React.FC = () => {
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
             <Button 
               onClick={handleSave} 
+              isLoading={saveMappingsMutation.isPending}
               disabled={
                 (mappingType === 'MAPPED' && !selectedModelId) || 
                 (mappingType === 'MISSING_MODEL' && !selectedMakeId)
@@ -519,7 +577,18 @@ export const ADPMappingView: React.FC = () => {
         <div className="space-y-6">
           {editingAdpItem && (
             <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 mb-4">
-              <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Target ADP Vehicle</h4>
+              <div className="flex justify-between items-start">
+                  <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Target ADP Vehicle</h4>
+                  <Button 
+                    variant="ai" 
+                    onClick={handleAISuggest} 
+                    isLoading={isSuggesting}
+                    className="text-xs py-1 h-7"
+                    title="Auto-suggest mapping"
+                  >
+                    AI Suggest
+                  </Button>
+              </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-slate-400 block text-xs">Make</span>
@@ -619,7 +688,7 @@ export const ADPMappingView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete}>Remove Mapping</Button>
+            <Button variant="danger" onClick={confirmDelete} isLoading={saveMappingsMutation.isPending}>Remove Mapping</Button>
           </>
         }
       >
@@ -634,6 +703,12 @@ export const ADPMappingView: React.FC = () => {
            </p>
         </div>
       </Modal>
+
+      <HistoryModal 
+        isOpen={isHistoryOpen} 
+        onClose={() => setIsHistoryOpen(false)}
+        adpId={historyAdpId}
+      />
     </div>
   );
 };

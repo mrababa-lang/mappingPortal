@@ -61,6 +61,15 @@ export interface ADPMakeMapping {
   updatedAt: string;
 }
 
+export interface ADPHistoryEntry {
+  id: string;
+  adpId: string;
+  timestamp: string;
+  userId: string;
+  action: 'CREATED' | 'UPDATED' | 'REVIEWED' | 'REJECTED';
+  details: string;
+}
+
 export type UserRole = 'Admin' | 'Mapping Admin' | 'Mapping User';
 
 export interface User {

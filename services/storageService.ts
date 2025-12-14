@@ -1,4 +1,4 @@
-import { VehicleType, Make, Model, ADPMaster, ADPMapping, User, ADPMakeMapping } from '../types';
+import { VehicleType, Make, Model, ADPMaster, ADPMapping, User, ADPMakeMapping, ADPHistoryEntry } from '../types';
 import { INITIAL_TYPES, INITIAL_MAKES, INITIAL_MODELS, INITIAL_ADP_MASTER, INITIAL_USERS } from '../constants';
 
 // Keys
@@ -67,4 +67,49 @@ export const DataService = {
   
   getModelName: (id: string) => load(K_MODELS, INITIAL_MODELS).find(m => m.id === id)?.name || 'Unknown',
   getUserName: (id: string) => load(K_USERS, INITIAL_USERS as User[]).find(u => u.id === id)?.name || 'Unknown',
+
+  // Mock History
+  getADPHistory: (adpId: string): ADPHistoryEntry[] => {
+    // Mock history generation based on current mapping
+    const mapping = load(K_ADP_MAPPING, INITIAL_ADP_MAPPING).find(m => m.adpId === adpId);
+    if (!mapping) return [];
+
+    const history: ADPHistoryEntry[] = [];
+    
+    // Entry 1: Created/Updated
+    if (mapping.updatedAt && mapping.updatedBy) {
+       history.push({
+         id: `hist-${adpId}-1`,
+         adpId,
+         timestamp: mapping.updatedAt,
+         userId: mapping.updatedBy,
+         action: 'UPDATED',
+         details: `Mapping updated to status: ${mapping.status || 'MAPPED'}`
+       });
+    }
+
+    // Entry 2: Reviewed
+    if (mapping.reviewedAt && mapping.reviewedBy) {
+       history.push({
+         id: `hist-${adpId}-2`,
+         adpId,
+         timestamp: mapping.reviewedAt,
+         userId: mapping.reviewedBy,
+         action: 'REVIEWED',
+         details: 'Mapping approved'
+       });
+    }
+
+    // Add some random older history for demo
+    history.push({
+        id: `hist-${adpId}-0`,
+        adpId,
+        timestamp: getRecentDate(48), // 2 days ago
+        userId: '1',
+        action: 'CREATED',
+        details: 'Initial import from ADP'
+    });
+
+    return history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
 };

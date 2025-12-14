@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/storageService';
 import { User } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Select, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, UserCircle, Shield, CheckCircle2, XCircle, Lock, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Edit2, UserCircle, Shield, CheckCircle2, XCircle, Lock, AlertTriangle, Loader2 } from 'lucide-react';
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../hooks/useVehicleData';
+import { toast } from 'sonner';
 
 export const UsersView: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  // Hooks
+  const { data: users = [], isLoading: isLoadingUsers } = useUsers();
+  const createUser = useCreateUser();
+  const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -20,14 +26,6 @@ export const UsersView: React.FC = () => {
     name: '', email: '', role: 'Mapping User', status: 'Active', password: ''
   });
 
-  useEffect(() => {
-    refreshData();
-  }, []);
-
-  const refreshData = () => {
-    setUsers(DataService.getUsers());
-  };
-
   const handleOpenModal = (user?: User) => {
     if (user) {
       setEditingId(user.id);
@@ -41,30 +39,31 @@ export const UsersView: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!formData.name || !formData.email) return;
-
-    // Require password for new users
-    if (!editingId && !formData.password) {
-      alert("Password is required for new users.");
+    if (!formData.name || !formData.email) {
+      toast.error("Name and Email are required.");
       return;
     }
 
-    let updatedUsers = [...users];
+    // Require password for new users
+    if (!editingId && !formData.password) {
+      toast.error("Password is required for new users.");
+      return;
+    }
 
     if (editingId) {
-      updatedUsers = users.map(u => {
-        if (u.id === editingId) {
-          // Only update password if a new one was entered
-          const updatedUser = { ...u, ...formData };
-          if (!formData.password) {
-            updatedUser.password = u.password;
-          }
-          return updatedUser as User;
-        }
-        return u;
+      // Find current user to keep old password if not changing
+      const currentUser = users.find(u => u.id === editingId);
+      const passwordToSave = formData.password ? formData.password : currentUser?.password;
+      
+      updateUser.mutate({ ...formData, id: editingId, password: passwordToSave } as User, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("User updated successfully");
+        },
+        onError: () => toast.error("Failed to update user")
       });
     } else {
-      const newUser: User = {
+      createUser.mutate({
         id: Date.now().toString(),
         name: formData.name!,
         email: formData.email!,
@@ -72,13 +71,14 @@ export const UsersView: React.FC = () => {
         role: formData.role! as 'Admin' | 'Mapping Admin' | 'Mapping User',
         status: formData.status! as 'Active' | 'Inactive',
         lastActive: 'Just now'
-      };
-      updatedUsers.push(newUser);
+      }, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("User created successfully");
+        },
+        onError: () => toast.error("Failed to create user")
+      });
     }
-    
-    DataService.saveUsers(updatedUsers);
-    setUsers(updatedUsers);
-    setIsModalOpen(false);
   };
 
   const initiateDelete = (id: string, e: React.MouseEvent) => {
@@ -89,20 +89,27 @@ export const UsersView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    const id = itemToDelete;
-
-    const currentUsers = DataService.getUsers();
-    const filtered = currentUsers.filter(u => u.id !== id);
-    DataService.saveUsers(filtered);
-    setUsers(filtered);
-
-    setIsDeleteModalOpen(false);
-    setItemToDelete(null);
+    deleteUser.mutate(itemToDelete, {
+      onSuccess: () => {
+        setIsDeleteModalOpen(false);
+        setItemToDelete(null);
+        toast.success("User deleted successfully");
+      },
+      onError: () => toast.error("Failed to delete user")
+    });
   };
 
   // Pagination Logic
   const totalPages = Math.ceil(users.length / ITEMS_PER_PAGE);
   const paginatedUsers = users.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  if (isLoadingUsers) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="animate-spin text-slate-400" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -191,7 +198,7 @@ export const UsersView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave}>Save User</Button>
+            <Button onClick={handleSave} isLoading={createUser.isPending || updateUser.isPending}>Save User</Button>
           </>
         }
       >
@@ -257,7 +264,7 @@ export const UsersView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete}>Delete User</Button>
+            <Button variant="danger" onClick={confirmDelete} isLoading={deleteUser.isPending}>Delete User</Button>
           </>
         }
       >

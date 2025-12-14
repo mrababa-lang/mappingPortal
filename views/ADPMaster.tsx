@@ -1,18 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { DataService } from '../services/storageService';
+import React, { useState, useEffect, useRef } from 'react';
 import { ADPMaster } from '../types';
-import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, Pagination } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle } from 'lucide-react';
+import { Card, Button, Input, Modal, TextArea } from '../components/UI';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { useADPMaster, useCreateADPMaster, useUpdateADPMaster, useDeleteADPMaster, useBulkImportADPMaster } from '../hooks/useVehicleData';
+import { toast } from 'sonner';
 
 export const ADPMasterView: React.FC = () => {
-  const [adpList, setAdpList] = useState<ADPMaster[]>([]);
+  // Hooks
+  const { data: adpList = [], isLoading: isLoadingADP } = useADPMaster();
+  const createADPMaster = useCreateADPMaster();
+  const updateADPMaster = useUpdateADPMaster();
+  const deleteADPMaster = useDeleteADPMaster();
+  const bulkImportADPMaster = useBulkImportADPMaster();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [bulkData, setBulkData] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
-  const ITEMS_PER_PAGE = 20;
 
   // Delete Modal State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -24,19 +30,6 @@ export const ADPMasterView: React.FC = () => {
     adpModelId: '', modelEnDesc: '', modelArDesc: '',
     adpTypeId: '', typeEnDesc: '', typeArDesc: ''
   });
-
-  useEffect(() => {
-    refreshData();
-  }, []);
-
-  // Reset page on search
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
-
-  const refreshData = () => {
-    setAdpList(DataService.getADPMaster());
-  };
 
   const handleOpenModal = (item?: ADPMaster) => {
     if (item) {
@@ -54,13 +47,21 @@ export const ADPMasterView: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!formData.adpMakeId || !formData.adpModelId || !formData.adpTypeId) return;
+    if (!formData.adpMakeId || !formData.adpModelId || !formData.adpTypeId) {
+        toast.error("Please fill in all IDs.");
+        return;
+    }
 
-    let updatedList = [...adpList];
     if (editingId) {
-      updatedList = adpList.map(item => item.id === editingId ? { ...item, ...formData } as ADPMaster : item);
+      updateADPMaster.mutate({ ...formData, id: editingId } as ADPMaster, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("ADP entry updated successfully");
+        },
+        onError: () => toast.error("Failed to update ADP entry")
+      });
     } else {
-      const newItem: ADPMaster = {
+      createADPMaster.mutate({
         id: Date.now().toString(),
         adpMakeId: formData.adpMakeId!,
         makeEnDesc: formData.makeEnDesc!,
@@ -71,12 +72,14 @@ export const ADPMasterView: React.FC = () => {
         adpTypeId: formData.adpTypeId!,
         typeEnDesc: formData.typeEnDesc!,
         typeArDesc: formData.typeArDesc!
-      };
-      updatedList.push(newItem);
+      }, {
+        onSuccess: () => {
+          setIsModalOpen(false);
+          toast.success("ADP entry created successfully");
+        },
+        onError: () => toast.error("Failed to create ADP entry")
+      });
     }
-    DataService.saveADPMaster(updatedList);
-    setAdpList(updatedList);
-    setIsModalOpen(false);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -117,13 +120,16 @@ export const ADPMasterView: React.FC = () => {
     });
 
     if (newItems.length > 0) {
-      const updated = [...adpList, ...newItems];
-      DataService.saveADPMaster(updated);
-      setAdpList(updated);
-      setIsBulkOpen(false);
-      setBulkData('');
+      bulkImportADPMaster.mutate(newItems, {
+        onSuccess: () => {
+          setIsBulkOpen(false);
+          setBulkData('');
+          toast.success(`Successfully imported ${newItems.length} records.`);
+        },
+        onError: () => toast.error("Failed to import records")
+      });
     } else {
-      alert("No valid data found or invalid format.");
+      toast.info("No valid data found or invalid format.");
     }
   };
 
@@ -135,23 +141,14 @@ export const ADPMasterView: React.FC = () => {
 
   const confirmDelete = () => {
     if (!itemToDelete) return;
-    const id = itemToDelete;
-
-    // Fetch fresh data
-    const currentMaster = DataService.getADPMaster();
-    const currentMappings = DataService.getADPMappings();
-
-    // 1. Delete Mappings related to this ADP Item
-    const updatedMappings = currentMappings.filter(m => m.adpId !== id);
-    DataService.saveADPMappings(updatedMappings);
-
-    // 2. Delete ADP Item
-    const filtered = currentMaster.filter(item => item.id !== id);
-    DataService.saveADPMaster(filtered);
-    
-    setAdpList(filtered);
-    setIsDeleteModalOpen(false);
-    setItemToDelete(null);
+    deleteADPMaster.mutate(itemToDelete, {
+      onSuccess: () => {
+        setIsDeleteModalOpen(false);
+        setItemToDelete(null);
+        toast.success("ADP entry deleted successfully");
+      },
+      onError: () => toast.error("Failed to delete ADP entry")
+    });
   };
 
   // Filter Logic
@@ -165,13 +162,26 @@ export const ADPMasterView: React.FC = () => {
            (item.modelArDesc && item.modelArDesc.includes(query));
   });
 
-  // Pagination Logic
-  const totalPages = Math.ceil(filteredItems.length / ITEMS_PER_PAGE);
-  const paginatedList = filteredItems.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  // --- Virtualization Setup ---
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: filteredItems.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 88, // Estimated height of a row in pixels
+    overscan: 5,
+  });
+
+  if (isLoadingADP) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="animate-spin text-slate-400" size={32} />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 flex flex-col h-[calc(100vh-8rem)]">
+      <div className="flex justify-between items-center shrink-0">
         <div>
            <h1 className="text-2xl font-bold text-slate-900">ADP Master List</h1>
            <p className="text-slate-500">Manage ADP Make, Model, and Type definitions.</p>
@@ -188,7 +198,7 @@ export const ADPMasterView: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-sm relative">
+      <div className="max-w-sm relative shrink-0">
         <Search className="absolute top-3 left-3 text-slate-400" size={18} />
         <Input 
           label="" 
@@ -199,67 +209,87 @@ export const ADPMasterView: React.FC = () => {
         />
       </div>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <TableHeader>
-              <TableHead>Make</TableHead>
-              <TableHead>Model</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableHeader>
-            <tbody>
-              {paginatedList.map(item => (
-                <TableRow key={item.id} onClick={() => handleOpenModal(item)}>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-mono text-xs text-slate-500 mb-1">{item.adpMakeId}</span>
-                      <span className="font-medium text-slate-900">{item.makeEnDesc}</span>
-                      <span className="text-xs text-slate-500" dir="rtl">{item.makeArDesc}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-mono text-xs text-slate-500 mb-1">{item.adpModelId}</span>
-                      <span className="font-medium text-slate-900">{item.modelEnDesc}</span>
-                      <span className="text-xs text-slate-500" dir="rtl">{item.modelArDesc}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-mono text-xs text-slate-500 mb-1">{item.adpTypeId}</span>
-                      <span className="font-medium text-slate-900">{item.typeEnDesc}</span>
-                      <span className="text-xs text-slate-500" dir="rtl">{item.typeArDesc}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+      <Card className="flex-1 flex flex-col overflow-hidden border border-slate-200 shadow-sm bg-white rounded-xl">
+        {/* Table Header (Fixed) */}
+        <div className="flex items-center px-4 py-3 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-500 uppercase tracking-wider shrink-0">
+           <div className="w-[20%] min-w-[150px]">Make</div>
+           <div className="w-[20%] min-w-[150px]">Model</div>
+           <div className="w-[20%] min-w-[150px]">Type</div>
+           <div className="ml-auto w-24 text-right">Actions</div>
+        </div>
+
+        {/* Virtualized List Body */}
+        <div ref={parentRef} className="flex-1 overflow-y-auto relative w-full">
+           <div 
+             style={{ 
+               height: `${rowVirtualizer.getTotalSize()}px`, 
+               width: '100%', 
+               position: 'relative' 
+             }}
+           >
+             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+               const item = filteredItems[virtualRow.index];
+               return (
+                 <div
+                   key={item.id}
+                   onClick={() => handleOpenModal(item)}
+                   style={{
+                     position: 'absolute',
+                     top: 0,
+                     left: 0,
+                     width: '100%',
+                     height: `${virtualRow.size}px`,
+                     transform: `translateY(${virtualRow.start}px)`,
+                   }}
+                   className="flex items-center px-4 py-3 border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
+                 >
+                   <div className="w-[20%] min-w-[150px] pr-2">
+                      <div className="flex flex-col">
+                        <span className="font-mono text-xs text-slate-500 mb-1">{item.adpMakeId}</span>
+                        <span className="font-medium text-slate-900 text-sm">{item.makeEnDesc}</span>
+                        <span className="text-xs text-slate-500" dir="rtl">{item.makeArDesc}</span>
+                      </div>
+                   </div>
+                   
+                   <div className="w-[20%] min-w-[150px] pr-2">
+                      <div className="flex flex-col">
+                        <span className="font-mono text-xs text-slate-500 mb-1">{item.adpModelId}</span>
+                        <span className="font-medium text-slate-900 text-sm">{item.modelEnDesc}</span>
+                        <span className="text-xs text-slate-500" dir="rtl">{item.modelArDesc}</span>
+                      </div>
+                   </div>
+                   
+                   <div className="w-[20%] min-w-[150px] pr-2">
+                      <div className="flex flex-col">
+                        <span className="font-mono text-xs text-slate-500 mb-1">{item.adpTypeId}</span>
+                        <span className="font-medium text-slate-900 text-sm">{item.typeEnDesc}</span>
+                        <span className="text-xs text-slate-500" dir="rtl">{item.typeArDesc}</span>
+                      </div>
+                   </div>
+                   
+                   <div className="ml-auto w-24 flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
                       <Button variant="ghost" className="p-2 h-auto" onClick={(e) => handleOpenModal(item)}>
                         <Edit2 size={16} />
                       </Button>
                       <Button variant="ghost" className="p-2 h-auto text-red-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => initiateDelete(item.id, e)}>
                         <Trash2 size={16} />
                       </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filteredItems.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
-                    No ADP entries found matching your search.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                   </div>
+                 </div>
+               );
+             })}
+           </div>
+
+           {filteredItems.length === 0 && (
+             <div className="flex items-center justify-center h-48 text-slate-400">
+               No ADP entries found matching your search.
+             </div>
+           )}
         </div>
-        <Pagination 
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          totalItems={filteredItems.length}
-        />
+        
+        <div className="px-4 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-500 shrink-0">
+           Total Items: <span className="font-medium">{filteredItems.length}</span> (Virtualized)
+        </div>
       </Card>
 
       <Modal 
@@ -269,7 +299,7 @@ export const ADPMasterView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave}>Save Changes</Button>
+            <Button onClick={handleSave} isLoading={createADPMaster.isPending || updateADPMaster.isPending}>Save Changes</Button>
           </>
         }
       >
@@ -314,7 +344,7 @@ export const ADPMasterView: React.FC = () => {
         footer={
           <>
             <Button variant="secondary" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={confirmDelete}>Delete Entry</Button>
+            <Button variant="danger" onClick={confirmDelete} isLoading={deleteADPMaster.isPending}>Delete Entry</Button>
           </>
         }
       >
@@ -338,7 +368,7 @@ export const ADPMasterView: React.FC = () => {
         footer={
           <>
              <Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button>
-             <Button onClick={handleBulkImport}>Import Data</Button>
+             <Button onClick={handleBulkImport} isLoading={bulkImportADPMaster.isPending}>Import Data</Button>
           </>
         }
       >
