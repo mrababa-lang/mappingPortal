@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useADPMappings, useUpsertMapping } from '../hooks/useADPData';
 import { useMakes, useModels } from '../hooks/useVehicleData';
+import { useAppConfig } from '../hooks/useAdminData';
 import { ADPMapping, ADPMaster } from '../types';
 import { Card, Button, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Input, SearchableSelect } from '../components/UI';
-import { Edit2, Filter, Download, CheckCircle2, AlertTriangle, HelpCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Edit2, Filter, Download, CheckCircle2, AlertTriangle, HelpCircle, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
+import { suggestMapping } from '../services/geminiService';
 
 export const ADPMappingView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -31,12 +33,14 @@ export const ADPMappingView: React.FC = () => {
   
   const { data: makes = [] } = useMakes();
   const { data: models = [] } = useModels();
+  const { data: config } = useAppConfig();
   
   const upsertMapping = useUpsertMapping();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ADPMaster | null>(null);
   const [mappingState, setMappingState] = useState({ status: 'MAPPED', makeId: '', modelId: '' });
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   const handleOpenModal = (item: any) => {
       setSelectedItem(item);
@@ -61,6 +65,49 @@ export const ADPMappingView: React.FC = () => {
           });
       }
   }
+
+  const handleAiSuggest = async () => {
+    if (!selectedItem) return;
+    setIsAiLoading(true);
+    
+    try {
+        const description = `${selectedItem.makeEnDesc} ${selectedItem.modelEnDesc} ${selectedItem.typeEnDesc || ''}`;
+        const result = await suggestMapping(description);
+        
+        if (result && result.make) {
+            // Fuzzy match Make
+            const foundMake = makes.find(m => m.name.toLowerCase().includes(result.make.toLowerCase()) || result.make.toLowerCase().includes(m.name.toLowerCase()));
+            
+            if (foundMake) {
+                let foundModel = null;
+                // If we found a make, try to find the model belonging to it
+                if (result.model) {
+                   foundModel = models.find(m => 
+                       m.makeId === foundMake.id && 
+                       (m.name.toLowerCase().includes(result.model.toLowerCase()) || result.model.toLowerCase().includes(m.name.toLowerCase()))
+                   );
+                }
+
+                setMappingState(prev => ({
+                    ...prev,
+                    makeId: foundMake.id,
+                    modelId: foundModel ? foundModel.id : prev.modelId,
+                    status: foundModel ? 'MAPPED' : 'MISSING_MODEL' // Default to MISSING_MODEL if AI found make but not model
+                }));
+                
+                toast.success(`AI Suggestion: ${foundMake.name} ${foundModel ? foundModel.name : ''}`);
+            } else {
+                toast.error(`AI found "${result.make}" but it does not match any existing Make.`);
+            }
+        } else {
+            toast.info("AI could not identify a vehicle clearly.");
+        }
+    } catch (e) {
+        toast.error("AI suggestion failed.");
+    } finally {
+        setIsAiLoading(false);
+    }
+  };
 
   const renderStatus = (status: string) => {
       switch(status) {
@@ -128,9 +175,17 @@ export const ADPMappingView: React.FC = () => {
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Map Vehicle" footer={<Button onClick={handleSave}>Save</Button>}>
          <div className="space-y-4">
-             <div className="p-3 bg-slate-50 rounded">
-                 <span className="text-xs font-bold text-slate-500">Target:</span>
-                 <div>{selectedItem?.makeEnDesc} {selectedItem?.modelEnDesc}</div>
+             <div className="flex justify-between items-start p-3 bg-slate-50 rounded">
+                 <div>
+                    <span className="text-xs font-bold text-slate-500 block mb-1">Source Description:</span>
+                    <div className="font-medium">{selectedItem?.makeEnDesc} {selectedItem?.modelEnDesc}</div>
+                    <div className="text-xs text-slate-500 mt-1">Type: {selectedItem?.typeEnDesc}</div>
+                 </div>
+                 {config?.enableAI && (
+                     <Button variant="ai" className="px-3 h-8 text-xs" onClick={handleAiSuggest} isLoading={isAiLoading}>
+                         <Sparkles size={14}/> Auto-Detect
+                     </Button>
+                 )}
              </div>
              
              <div className="flex gap-2">
@@ -141,7 +196,7 @@ export const ADPMappingView: React.FC = () => {
              <SearchableSelect 
                 label="Make" 
                 value={mappingState.makeId} 
-                onChange={v => setMappingState({...mappingState, makeId: v})} 
+                onChange={v => setMappingState({...mappingState, makeId: v, modelId: ''})} 
                 options={(Array.isArray(makes) ? makes : []).map(m => ({value: m.id, label: m.name}))} 
              />
              

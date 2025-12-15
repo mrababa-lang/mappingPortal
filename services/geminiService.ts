@@ -47,12 +47,29 @@ export const suggestModels = async (makeName: string): Promise<string[]> => {
   }
 };
 
-export const suggestMapping = async (adpDescription: string): Promise<{ makeId?: string, modelId?: string, reasoning?: string } | null> => {
+export const suggestMapping = async (adpDescription: string): Promise<{ make: string, model: string } | null> => {
   try {
-    const { data } = await api.post('/ai/suggest-mapping', { description: adpDescription });
-    return data;
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: `Extract the vehicle Manufacturer (make) and Model from this raw description: "${adpDescription}". If you cannot find them, return empty strings.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            make: { type: Type.STRING },
+            model: { type: Type.STRING }
+          }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) return null;
+    return JSON.parse(text);
   } catch (error) {
     console.error("AI Mapping Error:", error);
+    toast.error("Failed to get AI suggestion");
     return null;
   }
 };
