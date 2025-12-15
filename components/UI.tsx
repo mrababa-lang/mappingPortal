@@ -146,20 +146,27 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
+  
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null); // New Ref for the Portal Dropdown
   
   const selectedOption = options.find(opt => opt.value === value);
 
-  // Close when clicking outside
+  // Close when clicking outside of BOTH the input wrapper and the portal dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      
+      const clickedInsideInput = wrapperRef.current && wrapperRef.current.contains(target);
+      const clickedInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target);
+
+      if (!clickedInsideInput && !clickedInsideDropdown) {
         setIsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [wrapperRef]);
+  }, [wrapperRef, dropdownRef]);
 
   // Close on scroll to prevent detached popup
   useEffect(() => {
@@ -228,6 +235,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
         {/* Dropdown Portal */}
         {isOpen && !disabled && createPortal(
           <div 
+            ref={dropdownRef} // Attach Ref here to detect clicks inside portal
             className="fixed z-[9999] bg-white border border-slate-200 rounded-lg shadow-xl overflow-y-auto animate-in fade-in zoom-in-95 duration-100"
             style={{
               top: coords.top,
