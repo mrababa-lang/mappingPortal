@@ -20,6 +20,7 @@ export const ADPMakesView: React.FC = () => {
 
   const handleOpenModal = (item: any) => {
     setSelectedAdpMake(item);
+    // Use optional chaining in case sdMakeId is not yet in response, defaults to empty
     setSelectedSdMakeId(item.sdMakeId || '');
     setIsModalOpen(true);
   };
@@ -28,7 +29,7 @@ export const ADPMakesView: React.FC = () => {
     if (!selectedAdpMake || !selectedSdMakeId) return;
 
     saveMappingMutation.mutate({
-        adpMakeId: selectedAdpMake.adpMakeId,
+        adpMakeId: selectedAdpMake.id, // Updated from adpMakeId
         sdMakeId: selectedSdMakeId
     }, {
         onSuccess: () => {
@@ -78,14 +79,14 @@ export const ADPMakesView: React.FC = () => {
               {(data?.content || []).map((item: any) => {
                 const mappedSdMake = sdMakes.find(m => m.id === item.sdMakeId);
                 return (
-                  <TableRow key={item.adpMakeId} onClick={() => handleOpenModal(item)}>
+                  <TableRow key={item.id} onClick={() => handleOpenModal(item)}>
                     <TableCell>
                       <span className="font-mono text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                        {item.adpMakeId}
+                        {item.id}
                       </span>
                     </TableCell>
-                    <TableCell><span className="font-medium text-slate-900">{item.makeEnDesc}</span></TableCell>
-                    <TableCell><span className="text-slate-600 font-sans" dir="rtl">{item.makeArDesc}</span></TableCell>
+                    <TableCell><span className="font-medium text-slate-900">{item.enDescription}</span></TableCell>
+                    <TableCell><span className="text-slate-600 font-sans" dir="rtl">{item.arDescription}</span></TableCell>
                     <TableCell>
                       {mappedSdMake ? (
                         <div className="flex items-center gap-2 text-indigo-700 font-medium">
@@ -140,11 +141,11 @@ export const ADPMakesView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                    <div>
                      <span className="text-xs text-slate-500 block">Make ID</span>
-                     <span className="font-mono font-medium text-slate-900">{selectedAdpMake.adpMakeId}</span>
+                     <span className="font-mono font-medium text-slate-900">{selectedAdpMake.id}</span>
                    </div>
                    <div>
                      <span className="text-xs text-slate-500 block">English Desc</span>
-                     <span className="font-medium text-slate-900">{selectedAdpMake.makeEnDesc}</span>
+                     <span className="font-medium text-slate-900">{selectedAdpMake.enDescription}</span>
                    </div>
                 </div>
              </div>
