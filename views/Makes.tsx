@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useMakes, useModels, useTypes, useCreateMake, useUpdateMake, useDeleteMake, useBulkImportMakes } from '../hooks/useVehicleData';
 import { Make } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, TextArea, InfoTooltip } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2, Download } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -94,6 +94,20 @@ export const MakesView: React.FC = () => {
     }
   };
 
+  const handleDownloadSample = () => {
+    const headers = "name,nameAr";
+    const sample = "Toyota,تويوتا";
+    const csvContent = "\uFEFF" + headers + "\n" + sample;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "makes_template.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Filter & Pagination
   const filteredMakes = makes.filter(m => 
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -176,9 +190,22 @@ export const MakesView: React.FC = () => {
       <Modal isOpen={isBulkOpen} onClose={() => setIsBulkOpen(false)} title="Bulk Import" footer={
          <><Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button><Button onClick={handleBulkImport}>Upload</Button></>
       }>
-         <div className="p-4 bg-slate-50 border border-slate-200 rounded">
-             <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} />
-             <p className="text-xs text-slate-500 mt-2">CSV Format: Name, NameAr</p>
+         <div className="space-y-4">
+             <div className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded">
+                 <div className="flex flex-col">
+                    <span className="text-sm font-medium text-slate-700">Download Template</span>
+                    <span className="text-xs text-slate-500">Get the expected CSV format.</span>
+                 </div>
+                 <Button variant="secondary" onClick={handleDownloadSample} className="h-8 text-xs gap-2">
+                    <Download size={14}/> Download .csv
+                 </Button>
+             </div>
+             
+             <div className="p-4 bg-slate-50 border border-slate-200 rounded">
+                 <p className="text-sm font-medium text-slate-700 mb-2">Upload File</p>
+                 <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} />
+                 <p className="text-xs text-slate-500 mt-2">Accepted file type: .csv</p>
+             </div>
          </div>
       </Modal>
     </div>

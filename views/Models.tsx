@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useModels, useMakes, useTypes, useCreateModel, useUpdateModel, useDeleteModel, useBulkImportModels } from '../hooks/useVehicleData';
 import { Model } from '../types';
 import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, InfoTooltip } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, Search, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, Upload, Search, Loader2, Download } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 
@@ -75,6 +75,20 @@ export const ModelsView: React.FC = () => {
       }
   }
 
+  const handleDownloadSample = () => {
+    const headers = "make,type,name,nameAr";
+    const sample = "Toyota,SUV,Land Cruiser,لاند كروزر";
+    const csvContent = "\uFEFF" + headers + "\n" + sample;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "models_template.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Helper to display Make Name
   const getMakeName = (model: any) => {
       if (model.make?.name) return model.make.name;
@@ -144,7 +158,23 @@ export const ModelsView: React.FC = () => {
       </Modal>
       
       <Modal isOpen={isBulkOpen} onClose={() => setIsBulkOpen(false)} title="Bulk Import" footer={<Button onClick={handleBulk}>Upload</Button>}>
-          <input type="file" onChange={e => setBulkFile(e.target.files?.[0] || null)} />
+          <div className="space-y-4">
+             <div className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded">
+                 <div className="flex flex-col">
+                    <span className="text-sm font-medium text-slate-700">Download Template</span>
+                    <span className="text-xs text-slate-500">Get the expected CSV format.</span>
+                 </div>
+                 <Button variant="secondary" onClick={handleDownloadSample} className="h-8 text-xs gap-2">
+                    <Download size={14}/> Download .csv
+                 </Button>
+             </div>
+             
+             <div className="p-4 bg-slate-50 border border-slate-200 rounded">
+                 <p className="text-sm font-medium text-slate-700 mb-2">Upload File</p>
+                 <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} />
+                 <p className="text-xs text-slate-500 mt-2">Accepted file type: .csv</p>
+             </div>
+         </div>
       </Modal>
     </div>
   );
