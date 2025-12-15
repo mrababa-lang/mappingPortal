@@ -39,7 +39,7 @@ export const useUpdateMake = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (make: Make) => {
-      const { data } = await api.put<Make>(`/makes/${make.id}`, make);
+      const { data } = await api.put<Make>(`/makes/${encodeURIComponent(make.id)}`, make);
       return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['makes'] }),
@@ -50,7 +50,7 @@ export const useDeleteMake = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/makes/${id}`);
+      await api.delete(`/makes/${encodeURIComponent(id)}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['makes'] });
@@ -102,7 +102,7 @@ export const useUpdateModel = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (model: Model) => {
-       const { data } = await api.put<Model>(`/models/${model.id}`, model);
+       const { data } = await api.put<Model>(`/models/${encodeURIComponent(model.id)}`, model);
        return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
@@ -113,7 +113,7 @@ export const useDeleteModel = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await api.delete(`/models/${id}`);
+      await api.delete(`/models/${encodeURIComponent(id)}`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
   });
@@ -162,7 +162,7 @@ export const useUpdateType = () => {
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: async (type: VehicleType) => {
-         const { data } = await api.put<VehicleType>(`/types/${type.id}`, type);
+         const { data } = await api.put<VehicleType>(`/types/${encodeURIComponent(type.id)}`, type);
          return data;
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
@@ -173,7 +173,7 @@ export const useDeleteType = () => {
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: async (id: string) => {
-        await api.delete(`/types/${id}`);
+        await api.delete(`/types/${encodeURIComponent(id)}`);
       },
       onSuccess: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
     });

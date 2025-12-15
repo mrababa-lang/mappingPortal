@@ -73,7 +73,7 @@ export const useUpdateADPMaster = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (item: ADPMaster) => {
-            const { data } = await api.put(`/adp/master/${item.id}`, item);
+            const { data } = await api.put(`/adp/master/${encodeURIComponent(item.id)}`, item);
             return data;
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adpMaster'] }),
@@ -84,7 +84,7 @@ export const useDeleteADPMaster = () => {
     const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (id: string) => {
-            await api.delete(`/adp/master/${id}`);
+            await api.delete(`/adp/master/${encodeURIComponent(id)}`);
         },
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adpMaster'] }),
     });
@@ -112,7 +112,7 @@ export const useADPHistory = (adpId: string | null) => {
     queryKey: ['adpHistory', adpId],
     queryFn: async () => {
       if (!adpId) return [];
-      const { data } = await api.get(`/adp/history/${adpId}`);
+      const { data } = await api.get(`/adp/history/${encodeURIComponent(adpId)}`);
       return normalizeArray(data);
     },
     enabled: !!adpId
@@ -164,7 +164,7 @@ export const useUpsertMapping = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (mapping: { adpId: string, status: string, makeId?: string, modelId?: string }) => {
-      const { data } = await api.put(`/adp/mappings/${mapping.adpId}`, mapping);
+      const { data } = await api.put(`/adp/mappings/${encodeURIComponent(mapping.adpId)}`, mapping);
       return data;
     },
     onSuccess: () => {
@@ -179,7 +179,7 @@ export const useApproveMapping = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (adpId: string) => {
-      await api.post(`/adp/mappings/${adpId}/approve`);
+      await api.post(`/adp/mappings/${encodeURIComponent(adpId)}/approve`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adpMappings'] }),
   });
@@ -189,7 +189,7 @@ export const useRejectMapping = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (adpId: string) => {
-      await api.delete(`/adp/mappings/${adpId}/reject`);
+      await api.delete(`/adp/mappings/${encodeURIComponent(adpId)}/reject`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adpMappings'] }),
   });
