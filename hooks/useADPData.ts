@@ -277,7 +277,22 @@ export const useDashboardStats = () => {
     queryKey: ['stats'],
     queryFn: async () => {
       const { data } = await api.get('/stats/dashboard');
-      return normalizeObject(data);
+      const raw = normalizeObject(data);
+      
+      // Map potentially different backend keys to frontend expected keys
+      return {
+          totalMakes: raw.makes ?? raw.totalMakes ?? 0,
+          totalModels: raw.models ?? raw.totalModels ?? 0,
+          totalTypes: raw.types ?? raw.vehicleTypes ?? raw.totalTypes ?? 0,
+          
+          mappedCount: raw.mappedCount ?? raw.mapped ?? 0,
+          unmappedCount: raw.unmappedCount ?? raw.unmapped ?? 0,
+          missingModelCount: raw.missingModelCount ?? 0,
+          missingMakeCount: raw.missingMakeCount ?? 0,
+          localizationScore: raw.localizationScore ?? 0,
+          
+          ...raw
+      };
     },
   });
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAppConfig, useUpdateAppConfig } from '../hooks/useAdminData';
 import { AppConfig } from '../types';
 import { Card, Button, Switch, Input } from '../components/UI';
-import { Sparkles, Shield, AlertOctagon, Save, Activity, Key, Loader2 } from 'lucide-react';
+import { Sparkles, Shield, AlertOctagon, Save, Activity, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const ConfigurationView: React.FC = () => {
@@ -81,24 +81,6 @@ export const ConfigurationView: React.FC = () => {
                   disabled={!localConfig.enableAI}
                   className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 disabled:opacity-50"
                 />
-             </div>
-
-             <div className="space-y-2 pt-2 border-t border-slate-100">
-                <div className="flex items-center gap-2 mb-1">
-                  <Key size={14} className="text-slate-400" />
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gemini API Key</span>
-                </div>
-                <Input 
-                   label=""
-                   type="password"
-                   placeholder="Enter API Key (Leave empty to use system default)"
-                   value={localConfig.apiKey || ''}
-                   onChange={(e) => updateConfig('apiKey', e.target.value)}
-                   disabled={!localConfig.enableAI}
-                />
-                <p className="text-[10px] text-slate-400 leading-tight">
-                   Optional. Provide a specific Google Gemini API Key for this instance. If left blank, the system environment key will be used.
-                </p>
              </div>
              
              {!localConfig.enableAI && (
