@@ -77,7 +77,8 @@ export const ADPMakesView: React.FC = () => {
             </TableHeader>
             <tbody>
               {(data?.content || []).map((item: any) => {
-                const mappedSdMake = sdMakes.find(m => m.id === item.sdMakeId);
+                // Use loose equality (==) to handle potential string vs number ID mismatches
+                const mappedSdMake = sdMakes.find(m => m.id == item.sdMakeId);
                 return (
                   <TableRow key={item.adpMakeId || item.id} onClick={() => handleOpenModal(item)}>
                     <TableCell>
@@ -85,8 +86,8 @@ export const ADPMakesView: React.FC = () => {
                         {item.adpMakeId}
                       </span>
                     </TableCell>
-                    <TableCell><span className="font-medium text-slate-900">{item.adpMakeName || item.enDescription}</span></TableCell>
-                    <TableCell><span className="text-slate-600 font-sans" dir="rtl">{item.arDescription || '-'}</span></TableCell>
+                    <TableCell><span className="font-medium text-slate-900">{item.adpMakeName || item.enDescription || item.makeEnDesc}</span></TableCell>
+                    <TableCell><span className="text-slate-600 font-sans" dir="rtl">{item.arDescription || item.makeArDesc || '-'}</span></TableCell>
                     <TableCell>
                       {mappedSdMake ? (
                         <div className="flex items-center gap-2 text-indigo-700 font-medium">
@@ -145,7 +146,7 @@ export const ADPMakesView: React.FC = () => {
                    </div>
                    <div>
                      <span className="text-xs text-slate-500 block">Description</span>
-                     <span className="font-medium text-slate-900">{selectedAdpMake.adpMakeName || selectedAdpMake.enDescription}</span>
+                     <span className="font-medium text-slate-900">{selectedAdpMake.adpMakeName || selectedAdpMake.enDescription || selectedAdpMake.makeEnDesc}</span>
                    </div>
                 </div>
              </div>

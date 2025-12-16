@@ -46,8 +46,8 @@ export const ADPMappingView: React.FC = () => {
       setSelectedItem(item);
       setMappingState({
           status: item.status || 'MAPPED',
-          makeId: item.makeId || '', // Check if this corresponds to sdMakeId in data
-          modelId: item.modelId || ''
+          makeId: item.makeId || item.sdMakeId || '', // Check if this corresponds to sdMakeId in data
+          modelId: item.modelId || item.sdModelId || ''
       });
       setIsModalOpen(true);
   }
@@ -88,7 +88,8 @@ export const ADPMappingView: React.FC = () => {
                 // If we found a make, try to find the model belonging to it
                 if (result.model) {
                    foundModel = models.find(m => 
-                       m.makeId === foundMake.id && 
+                       // Handle both flat makeId and nested make.id
+                       ((m.makeId || (m.make && m.make.id)) == foundMake.id) && 
                        (m.name.toLowerCase().includes(result.model.toLowerCase()) || result.model.toLowerCase().includes(m.name.toLowerCase()))
                    );
                 }
@@ -213,7 +214,14 @@ export const ADPMappingView: React.FC = () => {
                     label="Model" 
                     value={mappingState.modelId} 
                     onChange={v => setMappingState({...mappingState, modelId: v})} 
-                    options={(Array.isArray(models) ? models : []).filter(m => m.makeId === mappingState.makeId).map(m => ({value: m.id, label: m.name}))} 
+                    options={(Array.isArray(models) ? models : [])
+                        .filter(m => {
+                            // Backend may return nested 'make' object OR flat 'makeId'
+                            // Also handle string/number mismatch with loose equality
+                            const modelMakeId = m.makeId || (m.make && m.make.id);
+                            return modelMakeId == mappingState.makeId;
+                        })
+                        .map(m => ({value: m.id, label: m.name}))} 
                  />
              )}
          </div>
