@@ -47,12 +47,15 @@ export const useADPMaster = (params: ADPQueryParams) => {
           size: params.size || 20
         } 
       });
-      // Handle Spring Data Page structure if returned, or simple array
-      const content = normalizeArray(data.content || data);
+      // Handle Spring Data Page structure or Custom Meta structure
+      const content = normalizeArray(data);
+      const totalElements = data.meta?.totalItems ?? data.totalElements ?? (content.length ? content.length : 0);
+      const totalPages = data.meta?.totalPages ?? data.totalPages ?? 1;
+
       return {
           content: content,
-          totalElements: data.totalElements || (content.length ? content.length : 0),
-          totalPages: data.totalPages || 1
+          totalElements: totalElements,
+          totalPages: totalPages
       };
     }
   });
@@ -149,12 +152,14 @@ export const useADPMappings = (params: ADPMappingQueryParams) => {
 
       const { data } = await api.get('/adp/mappings', { params: backendParams });
       
-      const content = normalizeArray(data.content || data);
+      const content = normalizeArray(data);
+      const totalElements = data.meta?.totalItems ?? data.totalElements ?? (content.length ? content.length : 0);
+      const totalPages = data.meta?.totalPages ?? data.totalPages ?? 1;
 
       return {
           content: content,
-          totalElements: data.totalElements || (content.length ? content.length : 0),
-          totalPages: data.totalPages || 1
+          totalElements: totalElements,
+          totalPages: totalPages
       };
     }
   });
@@ -217,12 +222,14 @@ export const useADPUniqueMakes = (params?: any) => {
                 q: params?.q
             }});
             
-            const content = normalizeArray(data.content || data);
+            const content = normalizeArray(data);
+            const totalElements = data.meta?.totalItems ?? data.totalElements ?? (content.length ? content.length : 0);
+            const totalPages = data.meta?.totalPages ?? data.totalPages ?? 1;
             
             return {
                 content: content,
-                totalPages: data.totalPages || 1,
-                totalElements: data.totalElements || (content.length ? content.length : 0)
+                totalPages: totalPages,
+                totalElements: totalElements
             }
         }
     })
@@ -251,12 +258,14 @@ export const useADPUniqueTypes = (params?: any) => {
                 q: params?.q
             }});
             
-            const content = normalizeArray(data.content || data);
+            const content = normalizeArray(data);
+            const totalElements = data.meta?.totalItems ?? data.totalElements ?? (content.length ? content.length : 0);
+            const totalPages = data.meta?.totalPages ?? data.totalPages ?? 1;
             
             return {
                 content: content,
-                totalPages: data.totalPages || 1,
-                totalElements: data.totalElements || (content.length ? content.length : 0)
+                totalPages: totalPages,
+                totalElements: totalElements
             }
         }
     })

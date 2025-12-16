@@ -37,215 +37,186 @@ export const MappingReviewView: React.FC = () => {
   };
 
   const handleReject = (id: string) => {
-      if(!window.confirm("Reject and delete mapping?")) return;
-      rejectMutation.mutate(id, {
-          onSuccess: () => {
-              toast.success("Mapping rejected");
-              refetch();
-          }
-      });
+      if(window.confirm("Are you sure you want to reject this mapping? It will be reset to Unmapped.")) {
+          rejectMutation.mutate(id, {
+            onSuccess: () => {
+                toast.success("Mapping rejected/reset");
+                refetch();
+            }
+          });
+      }
   };
 
-  const handleBulkAction = () => {
+  const handleBulkApprove = () => {
+     if (!data?.content || data.content.length === 0) return;
+     // Filter only pending items for bulk approval
+     const pendingIds = data.content.filter((i: any) => !i.reviewedAt).map((i: any) => i.adpId);
+     if (pendingIds.length === 0) {
+         toast.info("No pending items to approve on this page.");
+         return;
+     }
+     setConfirmAction({ type: 'approveAll', count: pendingIds.length, ids: pendingIds });
+  };
+
+  const confirmBulkAction = () => {
       if (!confirmAction) return;
+      
+      const action = confirmAction.type === 'approveAll' ? 'APPROVE' : 'REJECT';
       bulkMutation.mutate({
-          action: confirmAction.type === 'approveAll' ? 'APPROVE' : 'REJECT',
+          action,
           ids: confirmAction.ids
       }, {
           onSuccess: () => {
-              toast.success("Bulk action completed");
+              toast.success(`Bulk ${action} successful`);
               setConfirmAction(null);
               refetch();
           }
       });
   };
 
-  const openBulkModal = (type: 'approveAll' | 'rejectAll') => {
-      // Typically bulk actions apply to current selection or current page. 
-      // For simplicity, let's apply to current page's visible IDs.
-      const ids = data?.content?.map((i: any) => i.id) || [];
-      if (ids.length === 0) return;
-      setConfirmAction({ type, count: ids.length, ids });
-  };
-
-  const renderMappingDesc = (item: any) => {
-      if(item.status === 'MISSING_MAKE') return <span className="text-red-500 flex items-center gap-1"><AlertTriangle size={12}/> Make Missing</span>;
-      if(item.status === 'MISSING_MODEL') return <span className="text-amber-500 flex items-center gap-1"><HelpCircle size={12}/> Model Missing</span>;
-      return <span className="text-indigo-700">{item.sdMakeName} {item.sdModelName}</span>;
+  const renderStatus = (status: string) => {
+      switch(status) {
+          case 'MAPPED': return <span className="text-emerald-600 flex items-center gap-1 font-medium"><CheckCircle2 size={14}/> Mapped</span>;
+          case 'MISSING_MAKE': return <span className="text-red-600 flex items-center gap-1 font-medium"><AlertTriangle size={14}/> Missing Make</span>;
+          case 'MISSING_MODEL': return <span className="text-amber-600 flex items-center gap-1 font-medium"><HelpCircle size={14}/> Missing Model</span>;
+          default: return <span className="text-slate-400 flex items-center gap-1"><Ban size={14}/> Unmapped</span>;
+      }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-4">
-        <div>
-           <h1 className="text-2xl font-bold text-slate-900">Mapping Review</h1>
-           <p className="text-slate-500">Approve or reject pending mapping changes.</p>
-        </div>
-
-        <div className="flex flex-col gap-3 items-end">
-            <div className="flex items-end gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-sm flex-wrap">
-                <div className="flex items-center gap-2 px-2 text-slate-400 text-sm">
-                <Filter size={16} />
-                <span className="font-medium text-slate-600 hidden sm:inline">Filters:</span>
-                </div>
-
-                <div className="w-36">
-                    <Select
-                    label=""
-                    value={statusFilter}
-                    onChange={e => { setStatusFilter(e.target.value as any); setPage(1); }}
-                    options={[
-                        { value: 'all', label: 'All Reviews' },
-                        { value: 'pending', label: 'Pending' },
-                        { value: 'reviewed', label: 'Reviewed' }
-                    ]}
-                    className="py-1.5 text-xs"
-                    />
-                </div>
-
-                <div className="w-36">
-                    <Select
-                    label=""
-                    value={typeFilter}
-                    onChange={e => { setTypeFilter(e.target.value as any); setPage(1); }}
-                    options={[
-                        { value: 'all', label: 'All Types' },
-                        { value: 'MAPPED', label: 'Mapped' },
-                        { value: 'MISSING_MODEL', label: 'Missing Model' },
-                        { value: 'MISSING_MAKE', label: 'Missing Make' }
-                    ]}
-                    className="py-1.5 text-xs"
-                    />
-                </div>
-                
-                <div className="w-32 sm:w-36">
-                    <Input label="" type="date" className="py-1.5 text-xs" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-                </div>
-                <div className="w-32 sm:w-36">
-                    <Input label="" type="date" className="py-1.5 text-xs" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-                </div>
-                {(dateFrom || dateTo || statusFilter !== 'pending' || typeFilter !== 'all') && (
-                <button 
-                    onClick={() => { setDateFrom(''); setDateTo(''); setStatusFilter('pending'); setTypeFilter('all'); setPage(1); }} 
-                    className="p-2 text-slate-400 hover:text-red-500 transition-colors"
-                >
-                    <X size={16} />
-                </button>
-                )}
-            </div>
-
-            {statusFilter === 'pending' && (data?.content?.length || 0) > 0 && (
-                <div className="flex gap-2">
-                    <Button variant="danger" className="h-9 text-xs" onClick={() => openBulkModal('rejectAll')}>
-                        <Ban size={14} /> Reject Page
-                    </Button>
-                    <Button variant="primary" className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => openBulkModal('approveAll')}>
-                        <CheckCircle2 size={14} /> Approve Page
-                    </Button>
-                </div>
+      <div className="flex justify-between items-end">
+         <div>
+            <h1 className="text-2xl font-bold text-slate-900">Review Queue</h1>
+            <p className="text-slate-500">Validate and approve mapping links created by users.</p>
+         </div>
+         <div className="flex gap-2">
+            {statusFilter === 'pending' && (
+                <Button onClick={handleBulkApprove} className="bg-emerald-600 hover:bg-emerald-700">
+                    <CheckCircle2 size={18}/> Approve Page
+                </Button>
             )}
-        </div>
+         </div>
       </div>
 
-      <Card className="overflow-hidden">
-        {isLoading ? <div className="p-10 flex justify-center"><Loader2 className="animate-spin"/></div> : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <TableHeader>
-              <TableHead>Status</TableHead>
-              <TableHead>ADP Vehicle</TableHead>
-              <TableHead>Mapped To</TableHead>
-              <TableHead>Updated By</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableHeader>
-            <tbody>
-              {(data?.content || []).map((item: any) => {
-                const isReviewed = !!item.reviewedAt;
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      {isReviewed ? (
-                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                           <CheckCircle2 size={12} /> Reviewed
-                         </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-100">
-                           <Clock size={12} /> Pending
-                         </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                        <div className="flex flex-col">
-                            <span className="font-medium text-slate-700">{item.makeEnDesc} {item.modelEnDesc}</span>
-                            <span className="text-xs text-slate-500">{item.adpMakeId} / {item.adpModelId}</span>
-                        </div>
-                    </TableCell>
-                    <TableCell>
-                        <div className="flex items-center gap-2 font-medium">
-                            <ArrowRight size={14} className="text-slate-300" />
-                            {renderMappingDesc(item)}
-                        </div>
-                    </TableCell>
-                    <TableCell>
-                        <span className="text-slate-900 text-sm">{item.updatedBy || 'System'}</span>
-                    </TableCell>
-                    <TableCell>
-                        <span className="text-slate-500 text-xs">
-                            {item.updatedAt ? new Date(item.updatedAt).toLocaleString() : '-'}
-                        </span>
-                    </TableCell>
-                    <TableCell>
-                        {!isReviewed ? (
-                             <div className="flex gap-2">
-                                 <Button variant="secondary" className="h-8 px-3 text-xs text-emerald-700" onClick={() => handleApprove(item.id)}>
-                                    <CheckCircle2 size={14} />
-                                 </Button>
-                                 <Button variant="secondary" className="h-8 px-3 text-xs text-red-600" onClick={() => handleReject(item.id)}>
-                                    <XCircle size={14} />
-                                 </Button>
-                             </div>
-                        ) : (
-                            <span className="text-xs text-slate-400">Approved</span>
-                        )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              {(data?.content || []).length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">No items found.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      <Card className="p-4 bg-white border border-slate-200">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center gap-2 text-slate-500 text-sm font-medium min-w-fit">
+                <Filter size={18} />
+                <span>Filters:</span>
+            </div>
+            <div className="w-full md:w-48">
+                <Select 
+                    label="Review Status" 
+                    value={statusFilter} 
+                    onChange={v => setStatusFilter(v as any)} 
+                    options={[{value: 'pending', label: 'Pending Review'}, {value: 'reviewed', label: 'Already Reviewed'}, {value: 'all', label: 'All Records'}]}
+                />
+            </div>
+            <div className="w-full md:w-48">
+                <Select 
+                    label="Mapping Type" 
+                    value={typeFilter} 
+                    onChange={v => setTypeFilter(v as any)} 
+                    options={[{value: 'all', label: 'All Types'}, {value: 'MAPPED', label: 'Mapped'}, {value: 'MISSING_MODEL', label: 'Missing Model'}, {value: 'MISSING_MAKE', label: 'Missing Make'}]}
+                />
+            </div>
+            <div className="w-full md:w-40">
+                 <Input type="date" label="From" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            </div>
+            <div className="w-full md:w-40">
+                 <Input type="date" label="To" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+            </div>
         </div>
-        )}
-        <Pagination currentPage={page} totalPages={data?.totalPages || 1} onPageChange={setPage} totalItems={data?.totalElements || 0} />
       </Card>
 
-      <Modal
-        isOpen={!!confirmAction}
-        onClose={() => setConfirmAction(null)}
-        title={confirmAction?.type === 'approveAll' ? 'Approve Page' : 'Reject Page'}
-        footer={
-          <>
-             <Button variant="secondary" onClick={() => setConfirmAction(null)}>Cancel</Button>
-             <Button 
-               variant={confirmAction?.type === 'rejectAll' ? 'danger' : 'primary'}
-               onClick={handleBulkAction}
-             >
-               Confirm
-             </Button>
-          </>
-        }
+      <Card className="overflow-hidden">
+        {isLoading ? <div className="p-10 flex justify-center"><Loader2 className="animate-spin" /></div> : (
+        <>
+            <div className="overflow-x-auto">
+            <table className="w-full">
+                <TableHeader>
+                    <TableHead>ADP Source</TableHead>
+                    <TableHead>Mapping Proposal</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Updated By</TableHead>
+                    <TableHead>Actions</TableHead>
+                </TableHeader>
+                <tbody>
+                    {(data?.content || []).length === 0 ? (
+                        <tr><td colSpan={5} className="text-center py-8 text-slate-500">No records found.</td></tr>
+                    ) : (data?.content || []).map((row: any) => (
+                        <TableRow key={row.adpId}>
+                            <TableCell>
+                                <div className="font-medium text-slate-900">{row.makeEnDesc} {row.modelEnDesc}</div>
+                                <div className="text-xs text-slate-400 font-mono mt-0.5">{row.adpMakeId} / {row.adpModelId}</div>
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex items-center gap-2">
+                                    <ArrowRight size={14} className="text-slate-300" />
+                                    {row.status === 'MAPPED' ? (
+                                        <div className="font-medium text-indigo-700">{row.sdMakeName} {row.sdModelName}</div>
+                                    ) : (
+                                        <div className="text-slate-500 italic">Partial / No Mapping</div>
+                                    )}
+                                </div>
+                            </TableCell>
+                            <TableCell>
+                                {renderStatus(row.status)}
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex flex-col">
+                                   <span className="text-sm text-slate-700">{row.updatedByName || row.updatedBy || 'Unknown'}</span>
+                                   <span className="text-xs text-slate-400 flex items-center gap-1"><Clock size={10}/> {row.updatedAt ? new Date(row.updatedAt).toLocaleDateString() : '-'}</span>
+                                </div>
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex gap-2">
+                                    {!row.reviewedAt && (
+                                        <>
+                                            <Button variant="primary" className="h-8 px-3 text-xs bg-emerald-600 hover:bg-emerald-700" onClick={() => handleApprove(row.adpId)}>Approve</Button>
+                                            <Button variant="danger" className="h-8 px-3 text-xs" onClick={() => handleReject(row.adpId)}>Reject</Button>
+                                        </>
+                                    )}
+                                    {row.reviewedAt && (
+                                        <span className="text-xs text-emerald-600 font-medium flex items-center gap-1 border border-emerald-200 bg-emerald-50 px-2 py-1 rounded">
+                                            <CheckCircle2 size={12}/> Reviewed
+                                        </span>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </tbody>
+            </table>
+            </div>
+            <Pagination currentPage={page} totalPages={data?.totalPages || 1} onPageChange={setPage} totalItems={data?.totalElements || 0} />
+        </>
+        )}
+      </Card>
+
+      <Modal 
+          isOpen={!!confirmAction} 
+          onClose={() => setConfirmAction(null)} 
+          title="Confirm Bulk Action"
+          footer={
+              <>
+                  <Button variant="secondary" onClick={() => setConfirmAction(null)}>Cancel</Button>
+                  <Button onClick={confirmBulkAction} className="bg-emerald-600 hover:bg-emerald-700">Confirm Approval</Button>
+              </>
+          }
       >
-        <div className="flex flex-col items-center justify-center p-4 text-center">
-           <h3 className="text-lg font-bold text-slate-900 mb-2">Confirm Bulk Action</h3>
-           <p className="text-slate-500 text-sm">
-             You are about to {confirmAction?.type === 'approveAll' ? 'approve' : 'reject'} {confirmAction?.count} items.
-           </p>
-        </div>
+          <div className="py-4">
+              <div className="flex items-center gap-3 mb-4">
+                  <div className="p-3 bg-emerald-100 text-emerald-600 rounded-full">
+                      <CheckCircle2 size={24} />
+                  </div>
+                  <div>
+                      <h3 className="font-bold text-slate-800">Approve {confirmAction?.count} Mappings?</h3>
+                      <p className="text-sm text-slate-500">This will mark the selected items as reviewed.</p>
+                  </div>
+              </div>
+          </div>
       </Modal>
     </div>
   );

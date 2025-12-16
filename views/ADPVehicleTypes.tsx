@@ -27,7 +27,7 @@ export const ADPVehicleTypesView: React.FC = () => {
   const handleSaveMapping = () => {
     if (!selectedAdpType || !selectedSdTypeId) return;
     saveMappingMutation.mutate({
-        adpTypeId: selectedAdpType.id, // Updated from adpTypeId
+        adpTypeId: selectedAdpType.adpTypeId,
         sdTypeId: selectedSdTypeId
     }, {
         onSuccess: () => {
@@ -77,14 +77,14 @@ export const ADPVehicleTypesView: React.FC = () => {
               {(data?.content || []).map((item: any) => {
                 const mappedSdType = sdTypes.find(t => t.id === item.sdTypeId);
                 return (
-                  <TableRow key={item.id} onClick={() => handleOpenModal(item)}>
+                  <TableRow key={item.adpTypeId || item.id} onClick={() => handleOpenModal(item)}>
                     <TableCell>
                       <span className="font-mono text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                        {item.id}
+                        {item.adpTypeId}
                       </span>
                     </TableCell>
-                    <TableCell><span className="font-medium text-slate-900">{item.enDescription}</span></TableCell>
-                    <TableCell><span className="text-slate-600 font-sans" dir="rtl">{item.arDescription}</span></TableCell>
+                    <TableCell><span className="font-medium text-slate-900">{item.adpTypeName || item.enDescription}</span></TableCell>
+                    <TableCell><span className="text-slate-600 font-sans" dir="rtl">{item.arDescription || '-'}</span></TableCell>
                     <TableCell>
                       {mappedSdType ? (
                         <div className="flex items-center gap-2 text-indigo-700 font-medium">
@@ -139,11 +139,11 @@ export const ADPVehicleTypesView: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                    <div>
                      <span className="text-xs text-slate-500 block">Type ID</span>
-                     <span className="font-mono font-medium text-slate-900">{selectedAdpType.id}</span>
+                     <span className="font-mono font-medium text-slate-900">{selectedAdpType.adpTypeId}</span>
                    </div>
                    <div>
-                     <span className="text-xs text-slate-500 block">English Desc</span>
-                     <span className="font-medium text-slate-900">{selectedAdpType.enDescription}</span>
+                     <span className="text-xs text-slate-500 block">Description</span>
+                     <span className="font-medium text-slate-900">{selectedAdpType.adpTypeName || selectedAdpType.enDescription}</span>
                    </div>
                 </div>
              </div>

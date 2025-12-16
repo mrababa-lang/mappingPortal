@@ -38,7 +38,7 @@ export const ADPMappingView: React.FC = () => {
   const upsertMapping = useUpsertMapping();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<ADPMaster | null>(null);
+  const [selectedItem, setSelectedItem] = useState<any | null>(null);
   const [mappingState, setMappingState] = useState({ status: 'MAPPED', makeId: '', modelId: '' });
   const [isAiLoading, setIsAiLoading] = useState(false);
 
@@ -46,16 +46,19 @@ export const ADPMappingView: React.FC = () => {
       setSelectedItem(item);
       setMappingState({
           status: item.status || 'MAPPED',
-          makeId: item.makeId || '',
+          makeId: item.makeId || '', // Check if this corresponds to sdMakeId in data
           modelId: item.modelId || ''
       });
       setIsModalOpen(true);
   }
 
   const handleSave = () => {
-      if(selectedItem) {
+      // Use adpId if available (Virtual View often returns adpId instead of id)
+      const targetId = selectedItem?.adpId || selectedItem?.id;
+      
+      if(targetId) {
           upsertMapping.mutate({
-              adpId: selectedItem.id,
+              adpId: targetId,
               ...mappingState
           }, {
               onSuccess: () => {
@@ -63,6 +66,8 @@ export const ADPMappingView: React.FC = () => {
                   toast.success("Mapping saved");
               }
           });
+      } else {
+        toast.error("Error: Item ID missing");
       }
   }
 
