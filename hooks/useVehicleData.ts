@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
-import { Make, Model, VehicleType, SlashMasterVehicle } from '../types';
+import { Make, Model, VehicleType } from '../types';
 import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 
 // Helper to normalize array responses to handle { data: [...] } or direct [...]
 const normalizeArray = (data: any): any[] => {
@@ -27,11 +28,25 @@ export const useCreateMake = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (make: Partial<Make>) => {
-      // Send ID for creation (Manual ID Entry)
       const { data } = await api.post<Make>('/makes', make);
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['makes'] }),
+    onMutate: async (newMake) => {
+        await queryClient.cancelQueries({ queryKey: ['makes'] });
+        const previousMakes = queryClient.getQueryData(['makes']);
+        queryClient.setQueryData(['makes'], (old: Make[] = []) => [
+             { ...newMake, id: newMake.id || 'TEMP_ID', name: newMake.name || 'New Make' } as Make, 
+             ...old
+        ]);
+        return { previousMakes };
+    },
+    onError: (err, newMake, context) => {
+        if(context?.previousMakes) {
+            queryClient.setQueryData(['makes'], context.previousMakes);
+        }
+        toast.error("Failed to create make");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['makes'] }),
   });
 };
 
@@ -42,7 +57,21 @@ export const useUpdateMake = () => {
       const { data } = await api.put<Make>(`/makes/${encodeURIComponent(make.id)}`, make);
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['makes'] }),
+    onMutate: async (updatedMake) => {
+        await queryClient.cancelQueries({ queryKey: ['makes'] });
+        const previousMakes = queryClient.getQueryData(['makes']);
+        queryClient.setQueryData(['makes'], (old: Make[] = []) => 
+            old.map(m => m.id === updatedMake.id ? updatedMake : m)
+        );
+        return { previousMakes };
+    },
+    onError: (err, newMake, context) => {
+        if(context?.previousMakes) {
+            queryClient.setQueryData(['makes'], context.previousMakes);
+        }
+        toast.error("Failed to update make");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['makes'] }),
   });
 };
 
@@ -52,7 +81,21 @@ export const useDeleteMake = () => {
     mutationFn: async (id: string) => {
       await api.delete(`/makes/${encodeURIComponent(id)}`);
     },
-    onSuccess: () => {
+    onMutate: async (id) => {
+        await queryClient.cancelQueries({ queryKey: ['makes'] });
+        const previousMakes = queryClient.getQueryData(['makes']);
+        queryClient.setQueryData(['makes'], (old: Make[] = []) => 
+            old.filter(m => m.id !== id)
+        );
+        return { previousMakes };
+    },
+    onError: (err, id, context) => {
+        if(context?.previousMakes) {
+             queryClient.setQueryData(['makes'], context.previousMakes);
+        }
+        toast.error("Failed to delete make");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['makes'] });
       queryClient.invalidateQueries({ queryKey: ['models'] }); // Models cascade delete
     },
@@ -90,11 +133,24 @@ export const useCreateModel = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (model: Partial<Model>) => {
-      // Send ID for creation (Manual ID Entry)
       const { data } = await api.post<Model>('/models', model);
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
+    onMutate: async (newModel) => {
+        await queryClient.cancelQueries({ queryKey: ['models'] });
+        const previousModels = queryClient.getQueryData(['models']);
+        // Optimistically add to list
+        queryClient.setQueryData(['models'], (old: Model[] = []) => [
+             { ...newModel, id: newModel.id || 'TEMP', name: newModel.name || 'New Model' } as Model, 
+             ...old
+        ]);
+        return { previousModels };
+    },
+    onError: (err, newModel, context) => {
+        if(context?.previousModels) queryClient.setQueryData(['models'], context.previousModels);
+        toast.error("Failed to create model");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
   });
 };
 
@@ -105,7 +161,19 @@ export const useUpdateModel = () => {
        const { data } = await api.put<Model>(`/models/${encodeURIComponent(model.id)}`, model);
        return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
+    onMutate: async (updatedModel) => {
+        await queryClient.cancelQueries({ queryKey: ['models'] });
+        const previousModels = queryClient.getQueryData(['models']);
+        queryClient.setQueryData(['models'], (old: Model[] = []) => 
+            old.map(m => m.id === updatedModel.id ? updatedModel : m)
+        );
+        return { previousModels };
+    },
+    onError: (err, model, context) => {
+        if(context?.previousModels) queryClient.setQueryData(['models'], context.previousModels);
+        toast.error("Failed to update model");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
   });
 };
 
@@ -115,7 +183,17 @@ export const useDeleteModel = () => {
     mutationFn: async (id: string) => {
       await api.delete(`/models/${encodeURIComponent(id)}`);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
+    onMutate: async (id) => {
+        await queryClient.cancelQueries({ queryKey: ['models'] });
+        const previousModels = queryClient.getQueryData(['models']);
+        queryClient.setQueryData(['models'], (old: Model[] = []) => old.filter(m => m.id !== id));
+        return { previousModels };
+    },
+    onError: (err, id, context) => {
+         if(context?.previousModels) queryClient.setQueryData(['models'], context.previousModels);
+         toast.error("Failed to delete model");
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['models'] }),
   });
 };
 
@@ -150,11 +228,23 @@ export const useCreateType = () => {
     const queryClient = useQueryClient();
     return useMutation({
       mutationFn: async (type: Partial<VehicleType>) => {
-        // Send ID for creation (Manual ID Entry)
         const { data } = await api.post<VehicleType>('/types', type);
         return data;
       },
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
+      onMutate: async (newType) => {
+         await queryClient.cancelQueries({ queryKey: ['types'] });
+         const previousTypes = queryClient.getQueryData(['types']);
+         queryClient.setQueryData(['types'], (old: VehicleType[] = []) => [
+             { ...newType, id: newType.id || 'TEMP', name: newType.name || 'New Type' } as VehicleType,
+             ...old
+         ]);
+         return { previousTypes };
+      },
+      onError: (err, type, context) => {
+         if(context?.previousTypes) queryClient.setQueryData(['types'], context.previousTypes);
+         toast.error("Failed to create type");
+      },
+      onSettled: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
     });
 };
 
@@ -165,7 +255,19 @@ export const useUpdateType = () => {
          const { data } = await api.put<VehicleType>(`/types/${encodeURIComponent(type.id)}`, type);
          return data;
       },
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
+      onMutate: async (updatedType) => {
+         await queryClient.cancelQueries({ queryKey: ['types'] });
+         const previousTypes = queryClient.getQueryData(['types']);
+         queryClient.setQueryData(['types'], (old: VehicleType[] = []) => 
+            old.map(t => t.id === updatedType.id ? updatedType : t)
+         );
+         return { previousTypes };
+      },
+      onError: (err, type, context) => {
+         if(context?.previousTypes) queryClient.setQueryData(['types'], context.previousTypes);
+         toast.error("Failed to update type");
+      },
+      onSettled: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
     });
 };
 
@@ -175,7 +277,17 @@ export const useDeleteType = () => {
       mutationFn: async (id: string) => {
         await api.delete(`/types/${encodeURIComponent(id)}`);
       },
-      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
+      onMutate: async (id) => {
+         await queryClient.cancelQueries({ queryKey: ['types'] });
+         const previousTypes = queryClient.getQueryData(['types']);
+         queryClient.setQueryData(['types'], (old: VehicleType[] = []) => old.filter(t => t.id !== id));
+         return { previousTypes };
+      },
+      onError: (err, id, context) => {
+         if(context?.previousTypes) queryClient.setQueryData(['types'], context.previousTypes);
+         toast.error("Failed to delete type");
+      },
+      onSettled: () => queryClient.invalidateQueries({ queryKey: ['types'] }),
     });
 };
 

@@ -1,10 +1,22 @@
 import React, { useState } from 'react';
 import { useModels, useMakes, useTypes, useCreateModel, useUpdateModel, useDeleteModel, useBulkImportModels } from '../hooks/useVehicleData';
 import { Model } from '../types';
-import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, InfoTooltip } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, InfoTooltip, EmptyState } from '../components/UI';
+import { Plus, Trash2, Edit2, Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Settings2, FileX } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { commonValidators } from '../utils/validation';
+
+const modelSchema = z.object({
+  id: commonValidators.numericId,
+  makeId: commonValidators.requiredString,
+  typeId: commonValidators.requiredString,
+  name: commonValidators.requiredString,
+  nameAr: commonValidators.arabicText,
+});
+type ModelFormData = z.infer<typeof modelSchema>;
 
 export const ModelsView: React.FC = () => {
   const { data: models = [], isLoading } = useModels();
@@ -24,7 +36,9 @@ export const ModelsView: React.FC = () => {
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<any>(null);
 
-  const { register, handleSubmit, reset } = useForm<Model>();
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<ModelFormData>({
+    resolver: zodResolver(modelSchema)
+  });
 
   // Helper to extract ID robustly from flat fields, nested objects, or snake_case
   const getSafeId = (item: any, idField: string, nestedObjField?: string) => {
@@ -47,19 +61,19 @@ export const ModelsView: React.FC = () => {
         id: model?.id || '',
         name: model?.name || '', 
         nameAr: model?.nameAr || '', 
-        makeId: makeId, 
-        typeId: typeId 
+        makeId: String(makeId), 
+        typeId: String(typeId) 
     });
     setIsModalOpen(true);
   };
 
-  const onSubmit = (data: Model) => {
+  const onSubmit = (data: ModelFormData) => {
     if (editingId) {
-      updateModel.mutate({ ...data, id: editingId }, {
+      updateModel.mutate({ ...data, id: editingId } as Model, {
         onSuccess: () => { setIsModalOpen(false); toast.success("Model updated"); }
       });
     } else {
-      createModel.mutate(data, {
+      createModel.mutate(data as Model, {
         onSuccess: () => { setIsModalOpen(false); toast.success("Model created"); }
       });
     }
@@ -110,7 +124,6 @@ export const ModelsView: React.FC = () => {
   const getMakeName = (model: any) => {
       if (model.make?.name) return model.make.name;
       const id = getSafeId(model, 'makeId', 'make');
-      // Use loose equality (==) to handle string/number mismatch
       return makes.find(m => m.id == id)?.name || id || '-';
   };
 
@@ -130,48 +143,87 @@ export const ModelsView: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between">
-         <h1 className="text-2xl font-bold">Vehicle Models</h1>
+         <div>
+            <h1 className="text-2xl font-bold">Vehicle Models</h1>
+            <p className="text-slate-500">Manage vehicle models configuration.</p>
+         </div>
          <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setIsBulkOpen(true)}><Upload size={18}/> Import</Button>
             <Button onClick={() => handleOpenModal()}><Plus size={18}/> Add Model</Button>
          </div>
       </div>
       
-      <Input label="" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+      <div className="max-w-md relative">
+        <Search className="absolute top-3 left-3 text-slate-400" size={18} />
+        <Input label="" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
+      </div>
 
       <Card>
-         <table className="w-full">
-            <TableHeader>
-                <TableHead>ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Make</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Actions</TableHead>
-            </TableHeader>
-            <tbody>
-                {paginated.map(model => (
-                    <TableRow key={model.id} onClick={() => handleOpenModal(model)}>
-                        <TableCell><span className="font-mono text-xs text-slate-400">{model.id}</span></TableCell>
-                        <TableCell>{model.name}</TableCell>
-                        <TableCell>{getMakeName(model)}</TableCell>
-                        <TableCell>{getTypeName(model)}</TableCell>
-                        <TableCell>
-                            <Button variant="ghost" onClick={(e) => { e.stopPropagation(); handleDelete(model.id); }}><Trash2 size={16} className="text-red-500"/></Button>
-                        </TableCell>
-                    </TableRow>
-                ))}
-            </tbody>
-         </table>
-         <Pagination currentPage={currentPage} totalPages={Math.ceil(filteredModels.length/20)} onPageChange={setCurrentPage} totalItems={filteredModels.length} />
+         {models.length === 0 ? (
+             <EmptyState 
+               icon={Settings2} 
+               title="No Models Found" 
+               description="You haven't added any vehicle models yet. Get started by creating one or importing a CSV file."
+               action={<Button onClick={() => handleOpenModal()}><Plus size={16}/> Create First Model</Button>}
+             />
+         ) : filteredModels.length === 0 ? (
+             <EmptyState 
+               icon={Search} 
+               title="No Matches" 
+               description={`No models found matching "${searchQuery}".`}
+             />
+         ) : (
+            <>
+            <table className="w-full">
+                <TableHeader>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Make</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Actions</TableHead>
+                </TableHeader>
+                <tbody>
+                    {paginated.map(model => (
+                        <TableRow key={model.id} onClick={() => handleOpenModal(model)}>
+                            <TableCell><span className="font-mono text-xs text-slate-400">{model.id}</span></TableCell>
+                            <TableCell>
+                                <div>{model.name}</div>
+                                {model.nameAr && <div className="text-xs text-slate-400" dir="rtl">{model.nameAr}</div>}
+                            </TableCell>
+                            <TableCell>{getMakeName(model)}</TableCell>
+                            <TableCell>{getTypeName(model)}</TableCell>
+                            <TableCell>
+                                <Button variant="ghost" onClick={(e) => { e.stopPropagation(); handleDelete(model.id); }}><Trash2 size={16} className="text-red-500"/></Button>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                </tbody>
+            </table>
+            <Pagination currentPage={currentPage} totalPages={Math.ceil(filteredModels.length/20)} onPageChange={setCurrentPage} totalItems={filteredModels.length} />
+            </>
+         )}
       </Card>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit' : 'Add'} footer={<Button onClick={handleSubmit(onSubmit)}>Save</Button>}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit Model' : 'Add Model'} footer={<Button onClick={handleSubmit(onSubmit)}>Save</Button>}>
           <div className="space-y-4">
-              <Input label="Model ID" {...register('id')} disabled={!!editingId} placeholder="e.g. 200" />
-              <Select label="Make" {...register('makeId')} options={makes.map(m => ({ value: m.id, label: m.name }))} />
-              <Select label="Type" {...register('typeId')} options={types.map(t => ({ value: t.id, label: t.name }))} />
-              <Input label="Name (En)" {...register('name')} />
-              <Input label="Name (Ar)" {...register('nameAr')} />
+              <Input label="Model ID" {...register('id')} disabled={!!editingId} placeholder="e.g. 200" error={errors.id?.message as string} />
+              
+              <Select 
+                 label="Make" 
+                 {...register('makeId')} 
+                 options={makes.map(m => ({ value: m.id, label: m.name }))} 
+                 error={errors.makeId?.message as string}
+              />
+              
+              <Select 
+                 label="Type" 
+                 {...register('typeId')} 
+                 options={types.map(t => ({ value: t.id, label: t.name }))} 
+                 error={errors.typeId?.message as string}
+              />
+              
+              <Input label="Name (En)" {...register('name')} error={errors.name?.message as string} />
+              <Input label="Name (Ar)" {...register('nameAr')} dir="rtl" error={errors.nameAr?.message as string} />
           </div>
       </Modal>
       

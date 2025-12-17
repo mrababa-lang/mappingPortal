@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Sparkles, ChevronLeft, ChevronRight, ChevronDown, Search, Check, Info } from 'lucide-react';
+import { X, Loader2, Sparkles, ChevronLeft, ChevronRight, ChevronDown, Search, Check, Info, FileX } from 'lucide-react';
 
 // --- Card ---
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -10,6 +10,23 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 export const Card: React.FC<CardProps> = ({ children, className = '', ...props }) => (
   <div className={`bg-white rounded-xl shadow-sm border border-slate-200/60 ${className}`} {...props}>
     {children}
+  </div>
+);
+
+// --- Empty State ---
+export const EmptyState: React.FC<{ 
+  icon?: React.ElementType, 
+  title: string, 
+  description: string, 
+  action?: React.ReactNode 
+}> = ({ icon: Icon = FileX, title, description, action }) => (
+  <div className="flex flex-col items-center justify-center py-16 px-4 text-center border-2 border-dashed border-slate-200 rounded-xl bg-slate-50/50">
+    <div className="p-4 bg-white rounded-full shadow-sm mb-4">
+      <Icon size={32} className="text-slate-400" />
+    </div>
+    <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+    <p className="text-sm text-slate-500 mt-2 max-w-sm mb-6 leading-relaxed">{description}</p>
+    {action}
   </div>
 );
 
@@ -75,14 +92,22 @@ export const InfoTooltip: React.FC<{ text: React.ReactNode }> = ({ text }) => (
 // --- Input ---
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label: string;
+  error?: string;
 }
 
-export const Input = React.forwardRef<HTMLInputElement, InputProps>(({ label, className = '', ...props }, ref) => (
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(({ label, error, className = '', ...props }, ref) => (
   <div className="space-y-1.5">
-    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
+    <div className="flex justify-between items-baseline">
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
+      {error && <span className="text-xs text-red-500 font-medium animate-in fade-in slide-in-from-right-1">{error}</span>}
+    </div>
     <input 
       ref={ref}
-      className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-slash-red/20 focus:border-slash-red/50 transition-all ${className}`}
+      className={`w-full px-4 py-2.5 bg-slate-50 border rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 transition-all ${
+        error 
+          ? 'border-red-300 focus:ring-red-200 focus:border-red-500' 
+          : 'border-slate-200 focus:ring-slash-red/20 focus:border-slash-red/50'
+      } ${className}`}
       {...props}
     />
   </div>
@@ -92,13 +117,21 @@ Input.displayName = 'Input';
 // --- TextArea ---
 interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label: string;
+  error?: string;
 }
-export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(({ label, className = '', ...props }, ref) => (
+export const TextArea = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(({ label, error, className = '', ...props }, ref) => (
   <div className="space-y-1.5">
-    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
+    <div className="flex justify-between items-baseline">
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
+      {error && <span className="text-xs text-red-500 font-medium animate-in fade-in slide-in-from-right-1">{error}</span>}
+    </div>
     <textarea 
       ref={ref}
-      className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-slash-red/20 focus:border-slash-red/50 transition-all min-h-[100px] ${className}`}
+      className={`w-full px-4 py-2.5 bg-slate-50 border rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 transition-all min-h-[100px] ${
+        error 
+          ? 'border-red-300 focus:ring-red-200 focus:border-red-500' 
+          : 'border-slate-200 focus:ring-slash-red/20 focus:border-slash-red/50'
+      } ${className}`}
       {...props}
     />
   </div>
@@ -109,15 +142,23 @@ TextArea.displayName = 'TextArea';
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
   options: { value: string; label: string }[];
+  error?: string;
 }
 
-export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ label, options, className = '', ...props }, ref) => (
+export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(({ label, options, error, className = '', ...props }, ref) => (
   <div className="space-y-1.5">
-    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
+    <div className="flex justify-between items-baseline">
+      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
+      {error && <span className="text-xs text-red-500 font-medium animate-in fade-in slide-in-from-right-1">{error}</span>}
+    </div>
     <div className="relative">
       <select 
         ref={ref}
-        className={`w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-slash-red/20 focus:border-slash-red/50 transition-all appearance-none ${className}`}
+        className={`w-full px-4 py-2.5 bg-slate-50 border rounded-lg text-slate-900 text-sm focus:outline-none focus:ring-2 transition-all appearance-none ${
+          error 
+            ? 'border-red-300 focus:ring-red-200 focus:border-red-500' 
+            : 'border-slate-200 focus:ring-slash-red/20 focus:border-slash-red/50'
+        } ${className}`}
         {...props}
       >
         <option value="" disabled>Select an option</option>
@@ -142,10 +183,11 @@ interface SearchableSelectProps {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  error?: string;
 }
 
 export const SearchableSelect: React.FC<SearchableSelectProps> = ({ 
-  label, value, onChange, options, placeholder = "Select...", disabled, className = '' 
+  label, value, onChange, options, placeholder = "Select...", disabled, className = '', error 
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -210,12 +252,19 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   return (
     <div className={`space-y-1.5 ${className}`} ref={wrapperRef}>
-      <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
+      <div className="flex justify-between items-baseline">
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
+        {error && <span className="text-xs text-red-500 font-medium animate-in fade-in slide-in-from-right-1">{error}</span>}
+      </div>
       <div className="relative">
         <div 
-          className={`flex items-center w-full bg-slate-50 border border-slate-200 rounded-lg focus-within:ring-2 focus-within:ring-slash-red/20 focus-within:border-slash-red/50 transition-all ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`flex items-center w-full bg-slate-50 border rounded-lg transition-all ${
+            error 
+              ? 'border-red-300 focus-within:ring-red-200 focus-within:border-red-500' 
+              : 'border-slate-200 focus-within:ring-2 focus-within:ring-slash-red/20 focus-within:border-slash-red/50'
+          } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          <Search size={16} className="ml-3 text-slate-400 shrink-0" />
+          <Search size={16} className={`ml-3 shrink-0 ${error ? 'text-red-300' : 'text-slate-400'}`} />
           <input
             type="text"
             className="w-full px-3 py-2.5 bg-transparent border-none focus:outline-none text-slate-900 text-sm placeholder:text-slate-400"

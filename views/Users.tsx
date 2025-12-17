@@ -1,10 +1,22 @@
 import React, { useState } from 'react';
 import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from '../hooks/useAdminData';
 import { User } from '../types';
-import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Select } from '../components/UI';
-import { Plus, Trash2, Edit2, Loader2, UserCircle } from 'lucide-react';
+import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Select, EmptyState } from '../components/UI';
+import { Plus, Trash2, Edit2, Loader2, UserCircle, Users } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { commonValidators } from '../utils/validation';
+
+const userSchema = z.object({
+  fullName: commonValidators.requiredString,
+  email: commonValidators.email,
+  password: z.string().optional(), // Optional on edit, required on create (handled in logic or separate schemas if strictness needed)
+  role: z.enum(['ADMIN', 'MAPPING_ADMIN', 'MAPPING_USER']),
+  status: z.enum(['ACTIVE', 'INACTIVE']),
+});
+type UserFormData = z.infer<typeof userSchema>;
 
 export const UsersView: React.FC = () => {
   const { data: usersData, isLoading } = useUsers();
@@ -17,7 +29,11 @@ export const UsersView: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const { register, handleSubmit, reset } = useForm<User>();
+  
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<UserFormData>({
+    resolver: zodResolver(userSchema),
+    defaultValues: { role: 'MAPPING_USER', status: 'ACTIVE' }
+  });
 
   const handleOpenModal = (user?: User) => {
     setEditingId(user?.id || null);
@@ -25,11 +41,16 @@ export const UsersView: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const onSubmit = (data: User) => {
+  const onSubmit = (data: UserFormData) => {
+    if (!editingId && !data.password) {
+        toast.error("Password is required for new users.");
+        return;
+    }
+    
     if (editingId) {
-      updateUser.mutate({ ...data, id: editingId }, { onSuccess: () => { setIsModalOpen(false); toast.success("Updated"); }});
+      updateUser.mutate({ ...data, id: editingId } as User, { onSuccess: () => { setIsModalOpen(false); toast.success("Updated"); }});
     } else {
-      createUser.mutate(data, { onSuccess: () => { setIsModalOpen(false); toast.success("Created"); }});
+      createUser.mutate(data as User, { onSuccess: () => { setIsModalOpen(false); toast.success("Created"); }});
     }
   };
 
@@ -50,7 +71,15 @@ export const UsersView: React.FC = () => {
       </div>
 
       <Card className="overflow-hidden">
-         <table className="w-full">
+         {users.length === 0 ? (
+            <EmptyState 
+               icon={Users}
+               title="No Users"
+               description="No users found in the system."
+               action={<Button onClick={() => handleOpenModal()}><Plus size={16}/> Create User</Button>}
+            />
+         ) : (
+            <table className="w-full">
             <TableHeader>
                 <TableHead>User</TableHead>
                 <TableHead>Role</TableHead>
@@ -58,12 +87,7 @@ export const UsersView: React.FC = () => {
                 <TableHead>Actions</TableHead>
             </TableHeader>
             <tbody>
-                {users.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="text-center py-10 text-slate-500">No users found.</td>
-                  </tr>
-                ) : (
-                  users.map(user => (
+                  {users.map(user => (
                     <TableRow key={user.id} onClick={() => handleOpenModal(user)}>
                         <TableCell>
                             <div className="flex items-center gap-3">
@@ -94,10 +118,10 @@ export const UsersView: React.FC = () => {
                             </div>
                         </TableCell>
                     </TableRow>
-                  ))
-                )}
+                  ))}
             </tbody>
          </table>
+         )}
       </Card>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit User' : 'Add New User'} footer={
@@ -107,15 +131,15 @@ export const UsersView: React.FC = () => {
          </>
       }>
           <div className="space-y-4">
-              <Input label="Full Name" {...register('fullName')} placeholder="e.g. John Doe" />
-              <Input label="Email Address" type="email" {...register('email')} placeholder="john@slashdata.ae" />
-              {!editingId && <Input label="Password" type="password" {...register('password')} placeholder="••••••••" />}
+              <Input label="Full Name" {...register('fullName')} placeholder="e.g. John Doe" error={errors.fullName?.message as string} />
+              <Input label="Email Address" type="email" {...register('email')} placeholder="john@slashdata.ae" error={errors.email?.message as string} />
+              {!editingId && <Input label="Password" type="password" {...register('password')} placeholder="••••••••" error={errors.password?.message as string} />}
               <Select label="Role" {...register('role')} options={[
                 {value:'ADMIN', label:'Admin'}, 
                 {value:'MAPPING_ADMIN', label:'Mapping Admin'},
                 {value:'MAPPING_USER', label:'Mapping User'}
-              ]} />
-              <Select label="Status" {...register('status')} options={[{value:'ACTIVE', label:'Active'}, {value:'INACTIVE', label:'Inactive'}]} />
+              ]} error={errors.role?.message as string} />
+              <Select label="Status" {...register('status')} options={[{value:'ACTIVE', label:'Active'}, {value:'INACTIVE', label:'Inactive'}]} error={errors.status?.message as string} />
           </div>
       </Modal>
     </div>

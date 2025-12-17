@@ -1,24 +1,24 @@
 import React, { useState } from 'react';
 import { useMakes, useModels, useTypes, useCreateMake, useUpdateMake, useDeleteMake, useBulkImportMakes } from '../hooks/useVehicleData';
 import { Make } from '../types';
-import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, TextArea, InfoTooltip } from '../components/UI';
-import { Plus, Trash2, Edit2, Upload, FileText, Search, AlertTriangle, Loader2, Download, CheckCircle2, XCircle } from 'lucide-react';
+import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, EmptyState } from '../components/UI';
+import { Plus, Trash2, Edit2, Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Car } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
+import { commonValidators } from '../utils/validation';
 
 const makeSchema = z.object({
-  id: z.string().min(1, "ID is required."),
-  name: z.string().min(1, "Make name is required."),
-  nameAr: z.string().optional(),
+  id: commonValidators.makeId,
+  name: commonValidators.requiredString,
+  nameAr: commonValidators.arabicText,
 });
 type MakeFormData = z.infer<typeof makeSchema>;
 
 export const MakesView: React.FC = () => {
   const { data: makes = [], isLoading } = useMakes();
   const { data: models = [] } = useModels();
-  const { data: types = [] } = useTypes();
   
   const createMake = useCreateMake();
   const updateMake = useUpdateMake();
@@ -73,6 +73,18 @@ export const MakesView: React.FC = () => {
 
   const confirmDelete = () => {
     if (itemToDelete) {
+        // Validation check for associated models
+        const hasModels = models.some(m => {
+            const makeId = m.makeId || (m.make && m.make.id);
+            return makeId === itemToDelete;
+        });
+
+        if (hasModels) {
+            toast.error("Cannot delete Make: It has associated models. Please delete models first.");
+            setIsDeleteModalOpen(false);
+            return;
+        }
+
       deleteMake.mutate(itemToDelete, {
         onSuccess: () => {
           setIsDeleteModalOpen(false);
@@ -87,7 +99,6 @@ export const MakesView: React.FC = () => {
     if (bulkFile) {
         bulkImportMakes.mutate(bulkFile, {
             onSuccess: (response: any) => {
-                // response can be { data: { ... } } or just { ... } depending on normalization
                 const resultData = response.data || response;
                 setUploadResult(resultData);
                 setBulkFile(null);
@@ -150,36 +161,53 @@ export const MakesView: React.FC = () => {
       </div>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <TableHeader>
-              <TableHead>ID</TableHead>
-              <TableHead>Name (En)</TableHead>
-              <TableHead>Name (Ar)</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableHeader>
-            <tbody>
-              {paginatedMakes.map(make => (
-                <TableRow key={make.id} onClick={() => handleOpenModal(make)}>
-                  <TableCell>
-                    <span className="font-mono text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                       {make.id}
-                    </span>
-                  </TableCell>
-                  <TableCell><div className="font-medium text-slate-900">{make.name}</div></TableCell>
-                  <TableCell>{make.nameAr || '-'}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-2" onClick={e => e.stopPropagation()}>
-                        <Button variant="ghost" onClick={() => handleOpenModal(make)}><Edit2 size={16} /></Button>
-                        <Button variant="ghost" className="text-red-500" onClick={() => { setItemToDelete(make.id); setIsDeleteModalOpen(true); }}><Trash2 size={16} /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredMakes.length} />
+        {makes.length === 0 ? (
+            <EmptyState 
+               icon={Car} 
+               title="No Makes Found" 
+               description="Start by adding a vehicle manufacturer or importing a list."
+               action={<Button onClick={() => handleOpenModal()}><Plus size={16}/> Create First Make</Button>}
+            />
+        ) : filteredMakes.length === 0 ? (
+            <EmptyState 
+               icon={Search} 
+               title="No Matches" 
+               description={`No makes found matching "${searchQuery}".`}
+            />
+        ) : (
+            <>
+            <div className="overflow-x-auto">
+            <table className="w-full">
+                <TableHeader>
+                <TableHead>ID</TableHead>
+                <TableHead>Name (En)</TableHead>
+                <TableHead>Name (Ar)</TableHead>
+                <TableHead>Actions</TableHead>
+                </TableHeader>
+                <tbody>
+                {paginatedMakes.map(make => (
+                    <TableRow key={make.id} onClick={() => handleOpenModal(make)}>
+                    <TableCell>
+                        <span className="font-mono text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">
+                        {make.id}
+                        </span>
+                    </TableCell>
+                    <TableCell><div className="font-medium text-slate-900">{make.name}</div></TableCell>
+                    <TableCell>{make.nameAr || '-'}</TableCell>
+                    <TableCell>
+                        <div className="flex gap-2" onClick={e => e.stopPropagation()}>
+                            <Button variant="ghost" onClick={() => handleOpenModal(make)}><Edit2 size={16} /></Button>
+                            <Button variant="ghost" className="text-red-500" onClick={() => { setItemToDelete(make.id); setIsDeleteModalOpen(true); }}><Trash2 size={16} /></Button>
+                        </div>
+                    </TableCell>
+                    </TableRow>
+                ))}
+                </tbody>
+            </table>
+            </div>
+            <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} totalItems={filteredMakes.length} />
+            </>
+        )}
       </Card>
 
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit Make' : 'Add Make'} footer={
@@ -189,11 +217,9 @@ export const MakesView: React.FC = () => {
         </>
       }>
         <div className="space-y-4">
-            <Input label="Make ID" {...register('id')} disabled={!!editingId} placeholder="e.g. TOY" />
-            {errors.id?.message && <span className="text-red-500 text-xs">{String(errors.id.message)}</span>}
-            <Input label="Name (En)" {...register('name')} />
-            {errors.name?.message && <span className="text-red-500 text-xs">{String(errors.name.message)}</span>}
-            <Input label="Name (Ar)" {...register('nameAr')} dir="rtl" />
+            <Input label="Make ID" {...register('id')} disabled={!!editingId} placeholder="e.g. TOY" error={errors.id?.message as string} />
+            <Input label="Name (En)" {...register('name')} error={errors.name?.message as string} />
+            <Input label="Name (Ar)" {...register('nameAr')} dir="rtl" error={errors.nameAr?.message as string} />
         </div>
       </Modal>
 
@@ -203,7 +229,7 @@ export const MakesView: React.FC = () => {
             <Button variant="danger" onClick={confirmDelete}>Delete</Button>
         </>
       }>
-         <p>Are you sure you want to delete this Make? This will also delete associated Models.</p>
+         <p>Are you sure you want to delete this Make? This action cannot be undone.</p>
       </Modal>
 
       <Modal isOpen={isBulkOpen} onClose={handleCloseBulk} title="Bulk Import" footer={
