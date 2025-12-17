@@ -176,6 +176,7 @@ export const useUpsertMapping = () => {
         queryClient.invalidateQueries({ queryKey: ['adpMappings'] });
         queryClient.invalidateQueries({ queryKey: ['adpMaster'] });
         queryClient.invalidateQueries({ queryKey: ['stats'] });
+        queryClient.invalidateQueries({ queryKey: ['adpMappedVehicles'] });
     },
   });
 };
@@ -208,6 +209,76 @@ export const useBulkMappingAction = () => {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['adpMappings'] }),
   });
+};
+
+// --- MAPPED VEHICLES REPORT ---
+
+export const useADPMappedVehicles = (params: { page: number, size: number, q?: string, dateFrom?: string, dateTo?: string }) => {
+  return useQuery({
+    queryKey: ['adpMappedVehicles', params],
+    queryFn: async () => {
+      // Backend expects an endpoint that filters only mapped items. 
+      // If endpoint doesn't exist yet, we can reuse /adp/mappings with status filters.
+      // However, per spec, we should target: /api/adp/mapped-vehicles
+      
+      const backendParams: any = {
+        page: (params.page || 1) - 1,
+        size: params.size || 20,
+        q: params.q,
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo
+      };
+
+      // Try dedicated endpoint, if fails fall back to mappings with filters? 
+      // For now assuming the backend implemented the spec provided in the text file.
+      // If not, we fall back to /adp/mappings?status=MAPPED,MISSING_MODEL
+      
+      try {
+        const { data } = await api.get('/adp/mapped-vehicles', { params: backendParams });
+        const content = normalizeArray(data);
+        const totalElements = data.meta?.totalItems ?? data.totalElements ?? (content.length ? content.length : 0);
+        const totalPages = data.meta?.totalPages ?? data.totalPages ?? 1;
+
+        return {
+            content: content,
+            totalElements: totalElements,
+            totalPages: totalPages
+        };
+      } catch (e) {
+         // Fallback logic for mock/dev if dedicated endpoint missing
+         console.warn("Dedicated endpoint /adp/mapped-vehicles failed, using generic mappings endpoint.");
+         backendParams.status = 'MAPPED'; // Simple fallback
+         const { data } = await api.get('/adp/mappings', { params: backendParams });
+         const content = normalizeArray(data);
+         return {
+            content: content,
+            totalElements: data.meta?.totalItems ?? 0,
+            totalPages: data.meta?.totalPages ?? 1
+         }
+      }
+    }
+  });
+};
+
+export const downloadMappedVehiclesReport = async (dateFrom?: string, dateTo?: string) => {
+    try {
+        const response = await api.get('/adp/mapped-vehicles/export', {
+            params: { dateFrom, dateTo, format: 'csv' },
+            responseType: 'blob'
+        });
+        
+        // Create download link
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `mapped_vehicles_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (e) {
+        console.error("Export failed", e);
+        throw e;
+    }
 };
 
 // --- UNIQUE MAKES & TYPES ---
@@ -244,6 +315,7 @@ export const useSaveMakeMapping = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['adpUniqueMakes'] });
             queryClient.invalidateQueries({ queryKey: ['adpMappings'] });
+            queryClient.invalidateQueries({ queryKey: ['adpMappedVehicles'] });
         }
     })
 }

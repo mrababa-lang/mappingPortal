@@ -15,7 +15,8 @@ import {
   Factory,
   Settings,
   Shapes,
-  ChevronRight
+  ChevronRight,
+  Truck
 } from 'lucide-react';
 import { Toaster } from 'sonner';
 import { NavItem, User } from '../types';
@@ -54,6 +55,7 @@ const ALL_NAV_GROUPS: NavGroup[] = [
       { id: 'adp-makes', label: 'ADP Makes', icon: Factory },
       { id: 'adp-types', label: 'ADP Types', icon: Shapes },
       { id: 'adp-mapping', label: 'Vehicle Mapping', icon: Link },
+      { id: 'adp-mapped-vehicles', label: 'Mapped List', icon: Truck },
       { id: 'mapping-review', label: 'Review Queue', icon: ClipboardCheck },
     ]
   },
@@ -91,7 +93,7 @@ export const Layout: React.FC<LayoutProps> = ({ onLogout, user }) => {
         if (normalizedRole === 'MAPPING_ADMIN') {
           const allowedIds = [
             'dashboard', 'makes', 'models', 'types',
-            'adp-master', 'adp-makes', 'adp-types', 'adp-mapping', 'mapping-review'
+            'adp-master', 'adp-makes', 'adp-types', 'adp-mapping', 'adp-mapped-vehicles', 'mapping-review'
           ];
           return allowedIds.includes(item.id);
         }
@@ -100,7 +102,7 @@ export const Layout: React.FC<LayoutProps> = ({ onLogout, user }) => {
         if (normalizedRole === 'MAPPING_USER') {
            const allowedIds = [
              'dashboard',
-             'adp-master', 'adp-makes', 'adp-types', 'adp-mapping'
+             'adp-master', 'adp-makes', 'adp-types', 'adp-mapping', 'adp-mapped-vehicles'
            ];
            return allowedIds.includes(item.id);
         }

@@ -97,7 +97,7 @@ export interface AppConfig {
   enableAuditLog: boolean;
 }
 
-export type ViewState = 'login' | 'dashboard' | 'types' | 'makes' | 'models' | 'adp-master' | 'adp-makes' | 'adp-types' | 'adp-mapping' | 'mapping-review' | 'users' | 'tracking' | 'configuration';
+export type ViewState = 'login' | 'dashboard' | 'types' | 'makes' | 'models' | 'adp-master' | 'adp-makes' | 'adp-types' | 'adp-mapping' | 'adp-mapped-vehicles' | 'mapping-review' | 'users' | 'tracking' | 'configuration';
 
 export interface NavItem {
   id: ViewState;
