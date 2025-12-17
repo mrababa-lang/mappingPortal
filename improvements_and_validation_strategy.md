@@ -23,9 +23,8 @@ As a Master Data Management (MDM) tool, data integrity is paramount.
     *   **Trimming:** Auto-trim whitespace from start/end of all text inputs.
 *   **Async Validation:**
     *   Implement "Check Availability" for IDs. When a user types a manual ID (e.g., `TOY`), fire a lightweight request to check if it already exists to prevent a 409 Conflict error upon submission.
-*   **CSV Pre-validation:**
-    *   Validate CSV headers client-side before upload.
-    *   Check for empty rows or duplicate IDs within the CSV file before sending to the server.
+*   **Fuzzy Duplicate Detection (New):**
+    *   When creating a new Model (e.g., "Corolla"), check against existing models using Levenshtein distance to warn if a similar name exists (e.g., "Corola", "Corolla LE"). Prevents pollution of the master list.
 
 ### 1.2 Backend Validation (Server-Side)
 **Goal:** Enforce business rules and integrity constraints.
@@ -48,19 +47,24 @@ As a Master Data Management (MDM) tool, data integrity is paramount.
 *   **Current Behavior:** The UI waits for the server response before updating the list (Spinners).
 *   **Improvement:** When a user creates/updates a record, update the UI list *immediately*. If the server fails, roll back the change and show a toast error. This makes the app feel instant.
 
-### 2.2 Advanced Filtering
+### 2.2 Advanced Filtering & Search
 *   **Multi-Select Filters:** Allow selecting multiple statuses (e.g., Show "Missing Model" AND "Missing Make").
 *   **Saved Views:** Allow users to save their filter combinations (e.g., "My Pending Reviews").
+*   **Global Search:** A top-level search bar that queries Makes, Models, and ADP records simultaneously.
 
-### 2.3 Visual Feedback
+### 2.3 Visual Feedback & Navigation
 *   **Diff View in History:** In the Audit Log, show a "Before vs After" comparison for updates (e.g., `Status: MAPPED -> MISSING_MODEL`).
 *   **Empty States:** Add helpful illustrations or "Call to Action" buttons when tables are empty (e.g., "No Models found. Import via CSV?").
+*   **Keyboard Navigation:**
+    *   **Mapping Review:** Allow power users to use keyboard shortcuts: `Arrow Keys` (Navigate), `A` (Approve), `R` (Reject).
+    *   **Modal Operations:** `Ctrl+Enter` to save, `Esc` to close.
 
-### 2.4 Keyboard Navigation
-*   **Mapping Review:** Allow power users to use keyboard shortcuts:
-    *   `Arrow Keys`: Navigate rows.
-    *   `A`: Approve.
-    *   `R`: Reject.
+### 2.4 Ignore / Blacklist Workflow (New)
+*   **Problem:** Some ADP records (e.g., "Fees", "Accessories", "Unknown") should never be mapped, but they clutter the "Unmapped" queue.
+*   **Solution:** Introduce an `IGNORED` status.
+    *   Add "Ignore" button in the Pending Mapping view.
+    *   Excluded from standard coverage stats.
+    *   Viewable in a separate "Ignored Items" list for audit purposes.
 
 ---
 
@@ -76,7 +80,11 @@ As a Master Data Management (MDM) tool, data integrity is paramount.
 *   Implement a global **Error Boundary** component. If a specific view crashes (e.g., malformed data), the rest of the app should remain usable, and a "Report Error" button should appear.
 
 ### 3.3 Large Dataset Handling
-*   **Virtualization:** Extend virtualization (currently in `ADPMaster`) to `ADPMappedVehicles` and `SlashMasterData` if record counts exceed 1,000 rows.
+*   **Virtualization:** Implement `react-window` or `@tanstack/react-virtual` for the `ADPMappingView` and `ADPMappedVehiclesView` tables. This is critical as the mapping table can grow to 10k+ rows.
+
+### 3.4 Internationalization (i18n)
+*   The application currently hardcodes English labels.
+*   **Strategy:** Implement `react-i18next` to support a full Arabic interface (RTL layout + Arabic labels) to match the bilingual data structure.
 
 ---
 
@@ -89,34 +97,56 @@ As a Master Data Management (MDM) tool, data integrity is paramount.
 *   Add checkboxes to the **Models** table.
 *   Allow actions like: *Change Type for Selected Models* (e.g., Move 50 models from "Car" to "SUV" at once).
 
+### 4.3 Stale Mapping Detection (New)
+*   **Problem:** If the Source ADP Data changes (e.g., `model_en_desc` changes from "Camry" to "Corolla"), the existing mapping might become invalid.
+*   **Solution:** Backend job to compare current ADP description hash vs. hash at time of mapping.
+    *   Flag records as `STALE_MAPPING`.
+    *   Show "Stale" indicator in the Mapped Vehicles view.
+    *   Force re-review.
+
 ---
 
-## 5. Security Enhancements
+## 5. AI & Automation (Phase 2)
 
-### 5.1 RBAC enforcement (Backend)
+### 5.1 Batch AI Suggestions
+*   Instead of opening the modal one by one, allow selecting 50 "Pending" rows and clicking **"Auto-Detect (AI)"**.
+*   The system processes them in the background and populates a "Proposed Mapping" column with a Confidence Score.
+*   Users can then Bulk Save high-confidence matches (>90%).
+
+### 5.2 AI-Assisted Normalization
+*   Use AI to suggest standardized Make/Model names during the "SlashData Master" creation process (e.g., suggesting "BMW" instead of "B.M.W.").
+
+---
+
+## 6. Security Enhancements
+
+### 6.1 RBAC enforcement (Backend)
 *   Ensure that even if the UI hides the "Delete" button, the API endpoint returns `403 Forbidden` if a standard user attempts to call it.
 
-### 5.2 Session Management
+### 6.2 Session Management
 *   Implement an "Idle Timeout". If the user is inactive for 15 minutes, auto-logout or show a lock screen.
 
-### 5.3 Audit Granularity
+### 6.3 Audit Granularity
 *   Ensure every single write operation records the `IP Address` and `User Agent` in the `SystemConfig` or `AuditLog` for forensic security.
 
 ---
 
-## 6. Implementation Checklist
+## 7. Implementation Checklist
 
-### Phase 1: hardening (Immediate)
+### Phase 1: Hardening (Immediate)
 - [ ] Add Zod validation to all forms.
 - [ ] Add regex validation for Manual IDs (Frontend & Backend).
 - [ ] Implement confirmation dialogs for all Delete actions.
+- [ ] **Action:** Implement "Ignore" status in backend Enum.
 
 ### Phase 2: UX (Short Term)
 - [ ] Add loading skeletons instead of spinners for smoother transitions.
 - [ ] Implement "Dry Run" for CSV imports.
 - [ ] Add Arabic input validation warnings.
+- [ ] **Action:** Implement Fuzzy Matching for Model creation.
 
 ### Phase 3: Advanced (Long Term)
 - [ ] Optimistic UI updates.
-- [ ] Keyboard shortcuts for Review Queue.
-- [ ] Visual Diff for History logs.
+- [ ] Virtualization for large tables.
+- [ ] Batch AI Auto-Mapping.
+- [ ] Stale Data detection jobs.

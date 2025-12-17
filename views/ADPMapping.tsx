@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useADPMappings, useUpsertMapping } from '../hooks/useADPData';
 import { useMakes, useModels } from '../hooks/useVehicleData';
 import { useAppConfig } from '../hooks/useAdminData';
-import { Card, Button, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Input, SearchableSelect, Pagination } from '../components/UI';
-import { Edit2, Loader2, Sparkles } from 'lucide-react';
+import { Card, Button, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Input, SearchableSelect, Pagination, EmptyState } from '../components/UI';
+import { Edit2, Loader2, Sparkles, Search, Filter, X, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { suggestMapping } from '../services/geminiService';
 
@@ -12,7 +12,7 @@ export const ADPMappingView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   
-  // Default status filter to MISSING_MODEL as requested, allow changing to UNMAPPED, but exclude MAPPED
+  // Default status filter to MISSING_MODEL, allow changing to UNMAPPED, exclude MAPPED
   const statusFilter = searchParams.get('statusFilter') || 'MISSING_MODEL';
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
@@ -23,6 +23,11 @@ export const ADPMappingView: React.FC = () => {
       if(value && value !== 'all') newParams.set(key, value); else newParams.delete(key);
       setSearchParams(newParams);
       setPage(1); 
+  };
+
+  const resetFilters = () => {
+      setSearchParams(new URLSearchParams({ statusFilter: 'MISSING_MODEL' }));
+      setPage(1);
   };
 
   const { data, isLoading } = useADPMappings({ 
@@ -116,33 +121,77 @@ export const ADPMappingView: React.FC = () => {
     }
   };
 
+  const hasActiveFilters = q || dateFrom || dateTo || statusFilter !== 'MISSING_MODEL';
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-end">
-         <h1 className="text-2xl font-bold">Pending ADP Mapping</h1>
-         <div className="flex gap-2">
-             <Select 
-                label="" 
-                value={statusFilter} 
-                onChange={e => updateParam('statusFilter', e.target.value)} 
-                options={[
-                    {value: 'MISSING_MODEL', label: 'Missing Model'}, 
-                    {value: 'MISSING_MAKE', label: 'Missing Make'},
-                    {value: 'UNMAPPED', label: 'Unmapped'}
-                ]} 
-             />
-             <Input 
-                label="" 
-                type="date" 
-                value={dateFrom} 
-                onChange={e => updateParam('dateFrom', e.target.value)} 
-             />
+         <div>
+            <h1 className="text-2xl font-bold text-slate-900">Pending ADP Mapping</h1>
+            <p className="text-slate-500">Review unmapped vehicles and missing models.</p>
          </div>
       </div>
+
+      <Card className="p-4 bg-white border border-slate-200">
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+             <div className="w-full md:flex-1 relative">
+                <Search className="absolute top-9 left-3 text-slate-400" size={18} />
+                <Input 
+                  label="Search" 
+                  placeholder="Search ADP Vehicle..." 
+                  value={q}
+                  onChange={e => updateParam('q', e.target.value)}
+                  className="pl-10"
+                />
+             </div>
+             <div className="w-full md:w-56">
+                 <Select 
+                    label="Status" 
+                    value={statusFilter} 
+                    onChange={e => updateParam('statusFilter', e.target.value)} 
+                    options={[
+                        {value: 'MISSING_MODEL', label: 'Missing Model'}, 
+                        {value: 'MISSING_MAKE', label: 'Missing Make'},
+                        {value: 'UNMAPPED', label: 'Unmapped'}
+                    ]} 
+                 />
+             </div>
+             <div className="w-full md:w-auto flex items-end gap-2">
+                 <div className="w-36">
+                    <Input 
+                        label="From" 
+                        type="date" 
+                        value={dateFrom} 
+                        onChange={e => updateParam('dateFrom', e.target.value)} 
+                    />
+                 </div>
+                 <div className="w-36">
+                    <Input 
+                        label="To" 
+                        type="date" 
+                        value={dateTo} 
+                        onChange={e => updateParam('dateTo', e.target.value)} 
+                    />
+                 </div>
+             </div>
+             {hasActiveFilters && (
+                 <Button variant="ghost" onClick={resetFilters} className="text-red-500 h-[42px] mb-0.5">
+                     <X size={16} /> Clear
+                 </Button>
+             )}
+        </div>
+      </Card>
 
       <Card className="overflow-hidden">
          {isLoading ? <div className="p-10 flex justify-center"><Loader2 className="animate-spin" /></div> : (
          <>
+             {(data?.content || []).length === 0 ? (
+                <EmptyState 
+                    title="No Pending Items"
+                    description="Great job! There are no records matching your current filters."
+                    icon={Search}
+                />
+             ) : (
              <div className="overflow-x-auto">
              <table className="w-full">
                 <TableHeader>
@@ -158,7 +207,21 @@ export const ADPMappingView: React.FC = () => {
                                 <span className="font-mono text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{row.adpMakeId} / {row.adpModelId}</span>
                             </TableCell>
                             <TableCell>
-                                {row.sdMakeName ? `${row.sdMakeName} ${row.sdModelName || ''}` : '-'}
+                                {row.sdMakeName ? (
+                                    <div className="flex items-center gap-1">
+                                        <span className="font-medium text-indigo-700">{row.sdMakeName}</span>
+                                        {row.sdModelName ? (
+                                            <>
+                                              <span className="text-slate-400">/</span>
+                                              <span className="text-slate-700">{row.sdModelName}</span>
+                                            </>
+                                        ) : (
+                                            <span className="text-amber-500 text-xs italic ml-1">(Missing Model)</span>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <span className="text-slate-400 italic">Not Mapped</span>
+                                )}
                             </TableCell>
                             <TableCell><Button variant="ghost" onClick={() => handleOpenModal(row)}><Edit2 size={16}/></Button></TableCell>
                         </TableRow>
@@ -166,6 +229,7 @@ export const ADPMappingView: React.FC = () => {
                 </tbody>
              </table>
              </div>
+             )}
              <Pagination 
                 currentPage={page} 
                 totalPages={data?.totalPages || 1} 

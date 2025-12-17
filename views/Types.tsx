@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useTypes, useCreateType, useUpdateType, useDeleteType } from '../hooks/useVehicleData';
 import { useAppConfig } from '../hooks/useAdminData';
 import { VehicleType } from '../types';
-import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, EmptyState } from '../components/UI';
-import { Plus, Trash2, Edit2, Loader2, Sparkles, Tags } from 'lucide-react';
+import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, TextArea, EmptyState, Pagination } from '../components/UI';
+import { Plus, Trash2, Loader2, Sparkles, Tags, Search, X } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import { generateDescription } from '../services/geminiService';
@@ -29,6 +29,9 @@ export const TypesView: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const ITEMS_PER_PAGE = 20;
   
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<TypeFormData>({
     resolver: zodResolver(typeSchema)
@@ -65,19 +68,50 @@ export const TypesView: React.FC = () => {
       setIsAiLoading(false);
   };
 
-  if (isLoading) return <Loader2 className="animate-spin m-auto" />;
+  // Filtering & Pagination Logic
+  const filteredTypes = types.filter(t => 
+    t.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    t.id.toString().includes(searchQuery) ||
+    (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+  
+  const totalPages = Math.ceil(filteredTypes.length / ITEMS_PER_PAGE);
+  const paginatedTypes = filteredTypes.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  if (isLoading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-slate-400" /></div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between">
+      <div className="flex justify-between items-end">
          <div>
-            <h1 className="text-2xl font-bold">Vehicle Types</h1>
+            <h1 className="text-2xl font-bold text-slate-900">Vehicle Types</h1>
             <p className="text-slate-500">Manage vehicle classification types.</p>
          </div>
          <Button onClick={() => handleOpenModal()}><Plus size={18}/> Add Type</Button>
       </div>
 
-      <Card>
+      <Card className="p-4 bg-white border border-slate-200">
+        <div className="relative max-w-md">
+           <Search className="absolute top-3 left-3 text-slate-400" size={18} />
+           <Input 
+             label="" 
+             placeholder="Search types..." 
+             value={searchQuery}
+             onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+             className="pl-10"
+           />
+           {searchQuery && (
+               <button 
+                 onClick={() => { setSearchQuery(''); setPage(1); }}
+                 className="absolute top-3 right-3 text-slate-400 hover:text-slate-600"
+               >
+                   <X size={16} />
+               </button>
+           )}
+        </div>
+      </Card>
+
+      <Card className="overflow-hidden">
          {types.length === 0 ? (
              <EmptyState 
                 icon={Tags}
@@ -85,7 +119,15 @@ export const TypesView: React.FC = () => {
                 description="Define your first vehicle classification type (e.g. SUV, Sedan)."
                 action={<Button onClick={() => handleOpenModal()}><Plus size={16}/> Add Type</Button>}
              />
+         ) : filteredTypes.length === 0 ? (
+             <EmptyState 
+                icon={Search}
+                title="No Matches"
+                description={`No types found matching "${searchQuery}".`}
+             />
          ) : (
+            <>
+            <div className="overflow-x-auto">
             <table className="w-full">
                 <TableHeader>
                     <TableHead>ID</TableHead>
@@ -94,11 +136,11 @@ export const TypesView: React.FC = () => {
                     <TableHead>Actions</TableHead>
                 </TableHeader>
                 <tbody>
-                    {types.map(type => (
+                    {paginatedTypes.map(type => (
                         <TableRow key={type.id} onClick={() => handleOpenModal(type)}>
-                            <TableCell><span className="font-mono text-xs text-slate-400">{type.id}</span></TableCell>
-                            <TableCell>{type.name}</TableCell>
-                            <TableCell>{type.description}</TableCell>
+                            <TableCell><span className="font-mono text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">{type.id}</span></TableCell>
+                            <TableCell><span className="font-medium text-slate-900">{type.name}</span></TableCell>
+                            <TableCell><span className="text-slate-500 truncate max-w-md block">{type.description || '-'}</span></TableCell>
                             <TableCell>
                                 <Button variant="ghost" onClick={(e) => { e.stopPropagation(); handleDelete(type.id); }}><Trash2 size={16} className="text-red-500"/></Button>
                             </TableCell>
@@ -106,10 +148,13 @@ export const TypesView: React.FC = () => {
                     ))}
                 </tbody>
             </table>
+            </div>
+            <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} totalItems={filteredTypes.length} />
+            </>
          )}
       </Card>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit' : 'Add'} footer={<Button onClick={handleSubmit(onSubmit)}>Save</Button>}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? 'Edit Type' : 'Add Type'} footer={<Button onClick={handleSubmit(onSubmit)}>Save</Button>}>
           <div className="space-y-4">
               <Input label="Type ID" {...register('id')} disabled={!!editingId} placeholder="e.g. 1" error={errors.id?.message as string} />
               <Input label="Name" {...register('name')} placeholder="e.g. Sport Utility Vehicle" error={errors.name?.message as string} />
