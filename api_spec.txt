@@ -45,11 +45,13 @@
     "totalMakes": 120,
     "totalModels": 850,
     "totalTypes": 15,
+    "adpTotalMakes": 130,
+    "adpTotalModels": 900,
+    "adpTotalTypes": 20,
     "mappedCount": 5000,
     "unmappedCount": 200,
     "missingModelCount": 50,
-    "missingMakeCount": 10,
-    "localizationScore": 85
+    "missingMakeCount": 10
   }
   ```
 

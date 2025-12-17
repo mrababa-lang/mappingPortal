@@ -283,14 +283,15 @@ export const downloadMappedVehiclesReport = async (dateFrom?: string, dateTo?: s
 
 // --- UNIQUE MAKES & TYPES ---
 
-export const useADPUniqueMakes = (params?: any) => {
+export const useADPUniqueMakes = (params?: { page: number, size: number, q?: string, status?: string }) => {
     return useQuery({
         queryKey: ['adpUniqueMakes', params],
         queryFn: async () => {
             const { data } = await api.get('/adp/makes', { params: {
                 page: (params?.page || 1) - 1,
                 size: params?.size || 20,
-                q: params?.q
+                q: params?.q,
+                status: params?.status === 'all' ? undefined : params?.status
             }});
             
             const content = normalizeArray(data);
@@ -304,6 +305,25 @@ export const useADPUniqueMakes = (params?: any) => {
             }
         }
     })
+}
+
+export const downloadADPMakesReport = async (status?: string) => {
+    try {
+        const response = await api.get('/adp/makes/export', {
+            params: { format: 'csv', status: status === 'all' ? undefined : status },
+            responseType: 'blob'
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `adp_makes_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (e) {
+        console.error("Export failed", e);
+        throw e;
+    }
 }
 
 export const useSaveMakeMapping = () => {
@@ -316,18 +336,20 @@ export const useSaveMakeMapping = () => {
             queryClient.invalidateQueries({ queryKey: ['adpUniqueMakes'] });
             queryClient.invalidateQueries({ queryKey: ['adpMappings'] });
             queryClient.invalidateQueries({ queryKey: ['adpMappedVehicles'] });
+            queryClient.invalidateQueries({ queryKey: ['stats'] });
         }
     })
 }
 
-export const useADPUniqueTypes = (params?: any) => {
+export const useADPUniqueTypes = (params?: { page: number, size: number, q?: string, status?: string }) => {
     return useQuery({
         queryKey: ['adpUniqueTypes', params],
         queryFn: async () => {
             const { data } = await api.get('/adp/types', { params: {
                 page: (params?.page || 1) - 1,
                 size: params?.size || 20,
-                q: params?.q
+                q: params?.q,
+                status: params?.status === 'all' ? undefined : params?.status
             }});
             
             const content = normalizeArray(data);
@@ -343,6 +365,25 @@ export const useADPUniqueTypes = (params?: any) => {
     })
 }
 
+export const downloadADPTypesReport = async (status?: string) => {
+    try {
+        const response = await api.get('/adp/types/export', {
+            params: { format: 'csv', status: status === 'all' ? undefined : status },
+            responseType: 'blob'
+        });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `adp_types_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    } catch (e) {
+        console.error("Export failed", e);
+        throw e;
+    }
+}
+
 export const useSaveTypeMapping = () => {
     const queryClient = useQueryClient();
     return useMutation({
@@ -352,6 +393,7 @@ export const useSaveTypeMapping = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['adpUniqueTypes'] });
             queryClient.invalidateQueries({ queryKey: ['adpMappings'] });
+            queryClient.invalidateQueries({ queryKey: ['stats'] });
         }
     })
 }
@@ -370,6 +412,14 @@ export const useDashboardStats = () => {
           totalModels: raw.models ?? raw.totalModels ?? 0,
           totalTypes: raw.types ?? raw.vehicleTypes ?? raw.totalTypes ?? 0,
           
+          adpTotalMakes: raw.adpTotalMakes ?? 0,
+          adpTotalModels: raw.adpTotalModels ?? 0,
+          adpTotalTypes: raw.adpTotalTypes ?? 0,
+
+          // New fields for specific view KPIs
+          adpMappedMakes: raw.adpMappedMakes ?? 0,
+          adpMappedTypes: raw.adpMappedTypes ?? 0,
+
           mappedCount: raw.mappedCount ?? raw.mapped ?? 0,
           unmappedCount: raw.unmappedCount ?? raw.unmapped ?? 0,
           missingModelCount: raw.missingModelCount ?? 0,

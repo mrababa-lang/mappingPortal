@@ -29,7 +29,21 @@
 
 ### 2.3 Dashboard & Analytics
 - `GET /api/stats/dashboard`:
-  - Returns: `{ totalMakes, totalModels, totalTypes, adpCoveragePct, mappedCount, unmappedCount, localizationScore }`.
+  - Returns: 
+    ```json
+    {
+      "totalMakes": 120,       // SlashData Makes
+      "totalModels": 850,      // SlashData Models
+      "totalTypes": 15,        // SlashData Types
+      "adpTotalMakes": 130,    // ADP Unique Makes (New)
+      "adpTotalModels": 900,   // ADP Unique Models (New)
+      "adpTotalTypes": 20,     // ADP Unique Types (New)
+      "mappedCount": 5000,
+      "unmappedCount": 200,
+      "missingModelCount": 50,
+      "missingMakeCount": 10
+    }
+    ```
 - `GET /api/dashboard/activity`:
   - Returns: `List<ActivityLogDTO>` (Last 10 actions).
 - `GET /api/dashboard/trends`:
