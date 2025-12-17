@@ -34,6 +34,8 @@ JOIN Makes mk ON mod.make_id = mk.id
 JOIN VehicleTypes vt ON mod.type_id = vt.id
 WHERE 
   (:q IS NULL OR mod.name LIKE %:q% OR mk.name LIKE %:q%)
+  AND (:makeId IS NULL OR mk.id = :makeId)
+  AND (:typeId IS NULL OR vt.id = :typeId)
 ORDER BY mk.name, mod.name
 ```
 
@@ -41,6 +43,8 @@ ORDER BY mk.name, mod.name
 - `page`: Integer (0-based)
 - `size`: Integer
 - `q`: String (Search term)
+- `makeId`: String (Optional Filter)
+- `typeId`: String (Optional Filter)
 
 ### Response
 Standard Paginated Response DTO.
@@ -57,6 +61,8 @@ Download a CSV file containing **ALL** internal vehicles.
 
 ### Request Parameters
 - `format`: 'csv' (default)
+- `makeId`: String (Optional Filter)
+- `typeId`: String (Optional Filter)
 
 ### Response Headers
 - `Content-Type`: `text/csv`

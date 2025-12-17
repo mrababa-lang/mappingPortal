@@ -197,7 +197,7 @@ export const useBulkImportTypes = () => {
 
 // --- SLASH MASTER DATA (CONSOLIDATED) ---
 
-export const useSlashMasterData = (params: { page: number, size: number, q?: string }) => {
+export const useSlashMasterData = (params: { page: number, size: number, q?: string, makeId?: string, typeId?: string }) => {
   return useQuery({
     queryKey: ['slashMaster', params],
     queryFn: async () => {
@@ -209,7 +209,9 @@ export const useSlashMasterData = (params: { page: number, size: number, q?: str
         const { data } = await api.get('/master/vehicles', { params: {
             page: (params.page || 1) - 1,
             size: params.size || 20,
-            q: params.q
+            q: params.q,
+            makeId: params.makeId,
+            typeId: params.typeId
         }});
 
         const content = normalizeArray(data);
@@ -249,6 +251,13 @@ export const useSlashMasterData = (params: { page: number, size: number, q?: str
            };
         });
 
+        // Client side filtering
+        if (params.makeId) {
+            joined = joined.filter((i:any) => i.makeId === params.makeId);
+        }
+        if (params.typeId) {
+            joined = joined.filter((i:any) => i.typeId === params.typeId);
+        }
         if (params.q) {
             const q = params.q.toLowerCase();
             joined = joined.filter((i:any) => i.makeName.toLowerCase().includes(q) || i.modelName.toLowerCase().includes(q));
@@ -268,10 +277,10 @@ export const useSlashMasterData = (params: { page: number, size: number, q?: str
   });
 };
 
-export const downloadSlashMasterReport = async () => {
+export const downloadSlashMasterReport = async (makeId?: string, typeId?: string) => {
     try {
         const response = await api.get('/master/vehicles/export', {
-            params: { format: 'csv' },
+            params: { format: 'csv', makeId, typeId },
             responseType: 'blob'
         });
         

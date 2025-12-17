@@ -1,24 +1,34 @@
 import React, { useState } from 'react';
-import { useSlashMasterData, downloadSlashMasterReport } from '../hooks/useVehicleData';
-import { Card, Button, Input, Pagination, TableHeader, TableHead, TableRow, TableCell } from '../components/UI';
-import { Download, Loader2, Search, Database, Tag, Car } from 'lucide-react';
+import { useSlashMasterData, downloadSlashMasterReport, useMakes, useTypes } from '../hooks/useVehicleData';
+import { useDashboardStats } from '../hooks/useADPData';
+import { Card, Button, Input, Pagination, TableHeader, TableHead, TableRow, TableCell, SearchableSelect, Select } from '../components/UI';
+import { Download, Loader2, Search, Database, Tag, Car, Settings2, Filter, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const SlashMasterDataView: React.FC = () => {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMake, setSelectedMake] = useState('');
+  const [selectedType, setSelectedType] = useState('');
   const [isExporting, setIsExporting] = useState(false);
 
-  const { data, isLoading, refetch } = useSlashMasterData({ 
+  // Data Hooks
+  const { data: stats } = useDashboardStats();
+  const { data: makes = [] } = useMakes();
+  const { data: types = [] } = useTypes();
+
+  const { data, isLoading } = useSlashMasterData({ 
       page, 
       size: 20, 
-      q: searchQuery 
+      q: searchQuery,
+      makeId: selectedMake,
+      typeId: selectedType
   });
 
   const handleExport = async () => {
       setIsExporting(true);
       try {
-          await downloadSlashMasterReport();
+          await downloadSlashMasterReport(selectedMake, selectedType);
           toast.success("Master data exported successfully");
       } catch (e) {
           toast.error("Failed to export master data");
@@ -26,6 +36,28 @@ export const SlashMasterDataView: React.FC = () => {
           setIsExporting(false);
       }
   };
+
+  const clearFilters = () => {
+      setSearchQuery('');
+      setSelectedMake('');
+      setSelectedType('');
+      setPage(1);
+  };
+
+  const hasFilters = searchQuery || selectedMake || selectedType;
+
+  // Stats Card Component
+  const StatCard = ({ label, value, icon: Icon, color }: any) => (
+      <Card className="p-4 flex items-center justify-between border-l-4" style={{ borderLeftColor: color }}>
+          <div>
+              <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider">{label}</p>
+              <h3 className="text-2xl font-bold text-slate-800 mt-1">{value?.toLocaleString() || 0}</h3>
+          </div>
+          <div className={`p-2 rounded-lg opacity-80`} style={{ backgroundColor: `${color}20`, color: color }}>
+              <Icon size={20} />
+          </div>
+      </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -41,19 +73,53 @@ export const SlashMasterDataView: React.FC = () => {
         </div>
       </div>
 
+      {/* Statistics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard label="Total Makes" value={stats?.totalMakes} icon={Car} color="#3b82f6" />
+          <StatCard label="Total Models" value={stats?.totalModels} icon={Settings2} color="#8b5cf6" />
+          <StatCard label="Total Types" value={stats?.totalTypes} icon={Tag} color="#10b981" />
+      </div>
+
+      {/* Filters & Search */}
       <Card className="p-4 bg-white border border-slate-200">
-        <div className="relative max-w-md">
-             <Search className="absolute top-3 left-3 text-slate-400" size={18} />
-             <Input 
-               label="" 
-               placeholder="Search Make or Model..." 
-               value={searchQuery}
-               onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
-               className="pl-10"
-             />
+        <div className="flex flex-col lg:flex-row gap-4 items-end">
+             <div className="w-full lg:flex-1">
+                 <SearchableSelect 
+                    label="Filter by Make"
+                    placeholder="Select Manufacturer..."
+                    value={selectedMake}
+                    onChange={(val) => { setSelectedMake(val); setPage(1); }}
+                    options={makes.map(m => ({ value: m.id, label: m.name }))}
+                    className="w-full"
+                 />
+             </div>
+             <div className="w-full lg:w-48">
+                 <Select 
+                    label="Filter by Type"
+                    value={selectedType}
+                    onChange={(e) => { setSelectedType(e.target.value); setPage(1); }}
+                    options={types.map(t => ({ value: t.id, label: t.name }))}
+                 />
+             </div>
+             <div className="w-full lg:flex-1 relative">
+                 <Search className="absolute top-9 left-3 text-slate-400" size={18} />
+                 <Input 
+                   label="Search" 
+                   placeholder="Model name..." 
+                   value={searchQuery}
+                   onChange={e => { setSearchQuery(e.target.value); setPage(1); }}
+                   className="pl-10"
+                 />
+             </div>
+             {hasFilters && (
+                 <Button variant="ghost" onClick={clearFilters} className="text-red-500 h-[42px] mb-0.5">
+                     <X size={16} /> Clear
+                 </Button>
+             )}
         </div>
       </Card>
 
+      {/* Data Table */}
       <Card className="overflow-hidden">
         {isLoading ? <div className="p-10 flex justify-center"><Loader2 className="animate-spin" /></div> : (
         <>
@@ -66,7 +132,7 @@ export const SlashMasterDataView: React.FC = () => {
                 </TableHeader>
                 <tbody>
                     {(data?.content || []).length === 0 ? (
-                        <tr><td colSpan={3} className="text-center py-8 text-slate-500">No vehicles found.</td></tr>
+                        <tr><td colSpan={3} className="text-center py-8 text-slate-500">No vehicles found matching your criteria.</td></tr>
                     ) : (data?.content || []).map((row: any) => (
                         <TableRow key={`${row.makeId}-${row.modelId}`}>
                             <TableCell>

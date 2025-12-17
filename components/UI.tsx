@@ -3,8 +3,12 @@ import { createPortal } from 'react-dom';
 import { X, Loader2, Sparkles, ChevronLeft, ChevronRight, ChevronDown, Search, Check, Info } from 'lucide-react';
 
 // --- Card ---
-export const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <div className={`bg-white rounded-xl shadow-sm border border-slate-200/60 ${className}`}>
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: React.ReactNode;
+}
+
+export const Card: React.FC<CardProps> = ({ children, className = '', ...props }) => (
+  <div className={`bg-white rounded-xl shadow-sm border border-slate-200/60 ${className}`} {...props}>
     {children}
   </div>
 );
