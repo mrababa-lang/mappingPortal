@@ -47,8 +47,12 @@ export const suggestModels = async (makeName: string): Promise<string[]> => {
     
     const text = response.text;
     if (!text) return [];
-    const json = JSON.parse(text);
-    return json.suggestions || [];
+    try {
+      const json = JSON.parse(text);
+      return json.suggestions || [];
+    } catch (e) {
+      return [];
+    }
   } catch (error) {
     console.error("AI Suggestion Error:", error);
     return [];
@@ -80,10 +84,14 @@ export const suggestMapping = async (adpDescription: string): Promise<{ make: st
 
     const text = response.text;
     if (!text) return null;
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return null;
+    }
   } catch (error) {
     console.error("AI Mapping Error:", error);
-    toast.error("Failed to get AI suggestion");
+    // Silent error for batch processing to avoid toast spam, but logged for debugging
     return null;
   }
 };

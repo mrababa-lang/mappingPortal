@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, Sparkles, ChevronLeft, ChevronRight, ChevronDown, Search, Check, Info, FileX } from 'lucide-react';
 
 // --- Skeleton Loader ---
 export const Skeleton: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <div className={`animate-pulse bg-slate-200 rounded ${className}`}></div>
+  <span className={`animate-pulse bg-slate-200 rounded inline-block ${className}`}></span>
 );
 
 // --- Highlight Text ---
