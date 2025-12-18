@@ -1,14 +1,67 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { useADPMappings, useUpsertMapping } from '../hooks/useADPData';
 import { useMakes, useModels } from '../hooks/useVehicleData';
-import { Card, Button, TableHeader, TableHead, TableRow, TableCell, EmptyState, Pagination } from '../components/UI';
-import { Sparkles, Check, X, RefreshCw, BrainCircuit, AlertCircle, TrendingUp, Loader2, ArrowRight } from 'lucide-react';
+import { Card, Button, TableHeader, TableHead, TableRow, TableCell, EmptyState, Pagination, Skeleton, HighlightText } from '../components/UI';
+// Fix: Added missing Search icon to the lucide-react imports
+import { Sparkles, Check, X, RefreshCw, BrainCircuit, AlertCircle, TrendingUp, ArrowRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { suggestMapping } from '../services/geminiService';
+
+// --- Circular Gauge Component ---
+const CircularGauge: React.FC<{ score: number }> = ({ score }) => {
+  const radius = 18;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (score / 100) * circumference;
+  
+  const getColor = (s: number) => {
+    if (s > 85) return 'stroke-emerald-500';
+    if (s > 75) return 'stroke-amber-500';
+    return 'stroke-rose-500';
+  };
+
+  const getBgColor = (s: number) => {
+    if (s > 85) return 'text-emerald-50';
+    if (s > 75) return 'text-amber-50';
+    return 'text-rose-50';
+  };
+
+  return (
+    <div className="relative flex items-center justify-center group">
+      <svg className="w-12 h-12 transform -rotate-90">
+        <circle
+          cx="24"
+          cy="24"
+          r={radius}
+          stroke="currentColor"
+          strokeWidth="4"
+          fill="transparent"
+          className="text-slate-100"
+        />
+        <circle
+          cx="24"
+          cy="24"
+          r={radius}
+          stroke="currentColor"
+          strokeWidth="4"
+          fill="transparent"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className={`${getColor(score)} transition-all duration-1000 ease-out`}
+        />
+      </svg>
+      <span className={`absolute text-[10px] font-bold ${getColor(score).replace('stroke-', 'text-')}`}>
+        {score}%
+      </span>
+    </div>
+  );
+};
 
 export const AIMatchingView: React.FC = () => {
   const [page, setPage] = useState(1);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [aiMatches, setAiMatches] = useState<Record<string, { makeId: string, modelId: string, makeName: string, modelName: string, confidence: number }>>({});
 
   const { data, isLoading, refetch } = useADPMappings({ 
@@ -102,12 +155,6 @@ export const AIMatchingView: React.FC = () => {
     toast.info("Suggestion discarded.");
   };
 
-  const getConfidenceColor = (score: number) => {
-      if (score > 85) return 'bg-emerald-500';
-      if (score > 75) return 'bg-amber-500';
-      return 'bg-rose-500';
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -131,23 +178,45 @@ export const AIMatchingView: React.FC = () => {
               <div className="p-2 bg-indigo-600 text-white rounded-lg"><BrainCircuit size={20}/></div>
               <div>
                   <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest leading-none mb-1">Queue Size</p>
-                  <p className="text-xl font-bold text-indigo-900 leading-none">{data?.totalElements || 0}</p>
+                  <p className="text-xl font-bold text-indigo-900 leading-none">
+                    {isLoading ? <Skeleton className="h-5 w-8 inline-block" /> : (data?.totalElements || 0)}
+                  </p>
               </div>
           </Card>
           <Card className="p-4 bg-emerald-50 border-emerald-100 flex items-center gap-4">
               <div className="p-2 bg-emerald-600 text-white rounded-lg"><TrendingUp size={20}/></div>
               <div>
                   <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest leading-none mb-1">Identified</p>
-                  <p className="text-xl font-bold text-emerald-900 leading-none">{Object.keys(aiMatches).length}</p>
+                  <p className="text-xl font-bold text-emerald-900 leading-none">
+                    {Object.keys(aiMatches).length}
+                  </p>
               </div>
           </Card>
       </div>
 
+      <Card className="p-4 bg-white border border-slate-200">
+        <div className="relative max-w-md">
+            <Search className="absolute top-3 left-3 text-slate-400" size={18} />
+            <input 
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slash-red/20 focus:border-slash-red/50 transition-all"
+              placeholder="Filter queue by make or model description..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+        </div>
+      </Card>
+
       <Card className="overflow-hidden border border-slate-200">
          {isLoading ? (
-             <div className="p-20 flex flex-col items-center justify-center gap-4">
-                 <Loader2 className="animate-spin text-slate-400" size={32} />
-                 <span className="text-sm font-medium text-slate-400 uppercase tracking-widest">Waking up Gemini...</span>
+             <div className="p-4 space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 py-3 border-b border-slate-50 last:border-0">
+                    <Skeleton className="h-10 flex-1" />
+                    <Skeleton className="h-10 flex-1" />
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <Skeleton className="h-10 w-20" />
+                  </div>
+                ))}
              </div>
          ) : pendingItems.length === 0 ? (
              <EmptyState 
@@ -161,18 +230,22 @@ export const AIMatchingView: React.FC = () => {
                     <TableHeader>
                         <TableHead>Source Vehicle (ADP)</TableHead>
                         <TableHead>AI Suggestion</TableHead>
-                        <TableHead>Match Confidence</TableHead>
+                        <TableHead>Confidence</TableHead>
                         <TableHead className="text-right">Decide</TableHead>
                     </TableHeader>
                     <tbody>
-                        {pendingItems.map((item: any) => {
+                        {pendingItems.filter(item => 
+                          `${item.makeEnDesc} ${item.modelEnDesc}`.toLowerCase().includes(searchQuery.toLowerCase())
+                        ).map((item: any) => {
                             const adpId = item.adpId || item.id;
                             const match = aiMatches[adpId];
                             return (
                                 <TableRow key={adpId} className={match ? 'bg-indigo-50/20' : ''}>
                                     <TableCell>
                                         <div className="space-y-1">
-                                            <div className="font-bold text-slate-900 text-sm leading-tight">{item.makeEnDesc} {item.modelEnDesc}</div>
+                                            <div className="font-bold text-slate-900 text-sm leading-tight whitespace-normal">
+                                              <HighlightText text={`${item.makeEnDesc} ${item.modelEnDesc}`} highlight={searchQuery} />
+                                            </div>
                                             <div className="font-mono text-[10px] text-slate-400">{item.adpMakeId} / {item.adpModelId}</div>
                                         </div>
                                     </TableCell>
@@ -194,18 +267,7 @@ export const AIMatchingView: React.FC = () => {
                                     </TableCell>
                                     <TableCell>
                                         {match ? (
-                                            <div className="flex flex-col gap-1.5 w-32">
-                                                <div className="flex justify-between text-[10px] font-bold">
-                                                    <span className="text-slate-600 uppercase tracking-tighter">Certainty</span>
-                                                    <span className="text-indigo-600">{match.confidence}%</span>
-                                                </div>
-                                                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                                    <div 
-                                                        className={`h-full rounded-full transition-all duration-700 ${getConfidenceColor(match.confidence)}`} 
-                                                        style={{ width: `${match.confidence}%` }}
-                                                    ></div>
-                                                </div>
-                                            </div>
+                                            <CircularGauge score={match.confidence} />
                                         ) : '-'}
                                     </TableCell>
                                     <TableCell className="text-right">

@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { useModels, useMakes, useTypes, useCreateModel, useUpdateModel, useDeleteModel, useBulkImportModels } from '../hooks/useVehicleData';
 import { Model } from '../types';
-import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, InfoTooltip, EmptyState } from '../components/UI';
+import { Card, Button, Input, Select, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, InfoTooltip, EmptyState, HighlightText } from '../components/UI';
 import { Plus, Trash2, Edit2, Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Settings2, FileX } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -135,7 +136,10 @@ export const ModelsView: React.FC = () => {
       return types.find(t => t.id == id)?.name || id || '-';
   };
 
-  const filteredModels = models.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredModels = models.filter(m => 
+    m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    m.id.toString().includes(searchQuery)
+  );
   const paginated = filteredModels.slice((currentPage - 1) * 20, currentPage * 20);
 
   if (isLoading) return <Loader2 className="animate-spin m-auto" />;
@@ -155,7 +159,7 @@ export const ModelsView: React.FC = () => {
       
       <div className="max-w-md relative">
         <Search className="absolute top-3 left-3 text-slate-400" size={18} />
-        <Input label="" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
+        <Input label="" placeholder="Search name or ID..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
       </div>
 
       <Card>
@@ -185,9 +189,13 @@ export const ModelsView: React.FC = () => {
                 <tbody>
                     {paginated.map(model => (
                         <TableRow key={model.id} onClick={() => handleOpenModal(model)}>
-                            <TableCell><span className="font-mono text-xs text-slate-400">{model.id}</span></TableCell>
                             <TableCell>
-                                <div>{model.name}</div>
+                              <span className="font-mono text-xs text-slate-400">
+                                <HighlightText text={model.id.toString()} highlight={searchQuery} />
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                                <div><HighlightText text={model.name} highlight={searchQuery} /></div>
                                 {model.nameAr && <div className="text-xs text-slate-400" dir="rtl">{model.nameAr}</div>}
                             </TableCell>
                             <TableCell>{getMakeName(model)}</TableCell>

@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { useDashboardStats, useTrendStats, useActivityLog } from '../hooks/useADPData';
-import { Card } from '../components/UI';
+import { Card, Skeleton } from '../components/UI';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from 'recharts';
-import { Car, Tags, Settings2, TrendingUp, CheckCircle2, AlertTriangle, FileWarning, Activity, Link, Loader2, Filter, Clock, ArrowRight } from 'lucide-react';
+import { Car, Tags, Settings2, TrendingUp, CheckCircle2, AlertTriangle, FileWarning, Activity, Link, Filter, Clock, ArrowRight } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export const Dashboard: React.FC = () => {
@@ -26,12 +27,8 @@ export const Dashboard: React.FC = () => {
   }
 
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
-  const { data: trendData } = useTrendStats(dateFrom, dateTo);
-  const { data: recentActivity } = useActivityLog();
-
-  if (statsLoading) {
-    return <div className="flex h-96 items-center justify-center"><Loader2 className="animate-spin text-slate-400" size={32} /></div>;
-  }
+  const { data: trendData, isLoading: trendLoading } = useTrendStats(dateFrom, dateTo);
+  const { data: recentActivity, isLoading: activityLoading } = useActivityLog();
 
   // Fallback defaults if API returns null/undefined
   const safeStats = stats || {
@@ -121,11 +118,11 @@ export const Dashboard: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 divide-x divide-slate-100">
                     <div>
                         <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">SlashData</span>
-                        <h3 className="text-2xl font-bold text-slate-900 leading-none">{stat.sdCount}</h3>
+                        {statsLoading ? <Skeleton className="h-6 w-12" /> : <h3 className="text-2xl font-bold text-slate-900 leading-none">{stat.sdCount}</h3>}
                     </div>
                     <div className="pl-4">
                         <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">ADP</span>
-                        <h3 className="text-2xl font-bold text-slate-600 leading-none">{stat.adpCount}</h3>
+                        {statsLoading ? <Skeleton className="h-6 w-12" /> : <h3 className="text-2xl font-bold text-slate-600 leading-none">{stat.adpCount}</h3>}
                     </div>
                 </div>
               </div>
@@ -139,34 +136,38 @@ export const Dashboard: React.FC = () => {
            <Card className="p-6 flex flex-col h-[380px]">
              <h3 className="text-lg font-bold text-slate-800 mb-2">Mapping Distribution</h3>
              <div className="flex-1 w-full min-h-0">
-               <ResponsiveContainer width="100%" height="100%">
-                 <BarChart data={chartData} onClick={handleBarClick} className="cursor-pointer">
-                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 12}} dy={10} />
-                   <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 12}} />
-                   <Tooltip cursor={{fill: '#F1F5F9'}} />
-                   <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={50}>
-                     {chartData.map((entry, index) => (
-                       <Cell key={`cell-${index}`} fill={entry.color} />
-                     ))}
-                   </Bar>
-                 </BarChart>
-               </ResponsiveContainer>
+               {statsLoading ? <Skeleton className="w-full h-full rounded-lg" /> : (
+                 <ResponsiveContainer width="100%" height="100%">
+                   <BarChart data={chartData} onClick={handleBarClick} className="cursor-pointer">
+                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                     <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 12}} dy={10} />
+                     <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 12}} />
+                     <Tooltip cursor={{fill: '#F1F5F9'}} />
+                     <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={50}>
+                       {chartData.map((entry, index) => (
+                         <Cell key={`cell-${index}`} fill={entry.color} />
+                       ))}
+                     </Bar>
+                   </BarChart>
+                 </ResponsiveContainer>
+               )}
              </div>
            </Card>
 
            <Card className="p-6 flex flex-col h-[320px]">
               <h3 className="text-lg font-bold text-slate-800 mb-6">Mapping Activity Trend</h3>
               <div className="flex-1 w-full min-h-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={Array.isArray(trendData) ? trendData : []}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 10}} tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 12}} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={3} dot={{r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6}} />
-                  </LineChart>
-                </ResponsiveContainer>
+                {trendLoading ? <Skeleton className="w-full h-full rounded-lg" /> : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={Array.isArray(trendData) ? trendData : []}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 10}} tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748B', fontSize: 12}} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="count" stroke="#6366f1" strokeWidth={3} dot={{r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#fff'}} activeDot={{r: 6}} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
               </div>
            </Card>
         </div>
@@ -178,12 +179,14 @@ export const Dashboard: React.FC = () => {
                    <Link size={16} className="text-indigo-600" />
                    Coverage
                  </h3>
-                 <span className={`text-lg font-bold ${mappingCoverage < 80 ? 'text-amber-500' : 'text-emerald-600'}`}>
-                   {mappingCoverage}%
-                 </span>
+                 {statsLoading ? <Skeleton className="h-6 w-10" /> : (
+                   <span className={`text-lg font-bold ${mappingCoverage < 80 ? 'text-amber-500' : 'text-emerald-600'}`}>
+                     {mappingCoverage}%
+                   </span>
+                 )}
               </div>
               <div className="w-full bg-slate-200 rounded-full h-2 mb-2">
-                <div className={`h-2 rounded-full transition-all duration-500 ${mappingCoverage < 100 ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]'}`} style={{ width: `${mappingCoverage}%` }}></div>
+                <div className={`h-2 rounded-full transition-all duration-500 ${mappingCoverage < 100 ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]' : 'bg-emerald-50 shadow-[0_0_8px_rgba(16,185,129,0.4)]'}`} style={{ width: `${mappingCoverage}%` }}></div>
               </div>
               <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">SlashData / Total ADP Ratio</p>
            </Card>
@@ -196,17 +199,25 @@ export const Dashboard: React.FC = () => {
                 </h3>
              </div>
              <div className="flex-1 overflow-y-auto">
-               {!recentActivity || !Array.isArray(recentActivity) || recentActivity.length === 0 ? (
+               {activityLoading ? (
+                 <div className="p-4 space-y-4">
+                    {[...Array(6)].map((_, i) => (
+                      <div key={i} className="space-y-2">
+                        <Skeleton className="h-3 w-1/4" />
+                        <Skeleton className="h-8 w-full" />
+                      </div>
+                    ))}
+                 </div>
+               ) : !recentActivity || !Array.isArray(recentActivity) || recentActivity.length === 0 ? (
                  <div className="p-10 text-center flex flex-col items-center gap-3">
                     <div className="p-3 bg-slate-100 rounded-full">
-                        <Loader2 className="animate-spin text-slate-300" size={24} />
+                        <Clock className="text-slate-300" size={24} />
                     </div>
                     <span className="text-sm text-slate-400 font-medium">No recent activity detected.</span>
                  </div>
                ) : (
                  <div className="divide-y divide-slate-50">
                    {recentActivity.map((item: any, i: number) => {
-                     // Synthesize descriptive text from provided adpMasterId and status
                      const displayDate = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Just now';
                      const statusColor = item.status === 'MAPPED' ? 'text-emerald-600' : 'text-amber-600';
                      const actionLabel = item.status === 'MAPPED' ? 'Mapping confirmed' : 'Mapping updated';

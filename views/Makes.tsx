@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { useMakes, useModels, useTypes, useCreateMake, useUpdateMake, useDeleteMake, useBulkImportMakes } from '../hooks/useVehicleData';
 import { Make } from '../types';
-import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, EmptyState } from '../components/UI';
+import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, EmptyState, HighlightText } from '../components/UI';
 import { Plus, Trash2, Edit2, Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Car } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -135,7 +136,8 @@ export const MakesView: React.FC = () => {
   // Filter & Pagination
   const filteredMakes = makes.filter(m => 
     m.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (m.nameAr && m.nameAr.includes(searchQuery))
+    (m.nameAr && m.nameAr.includes(searchQuery)) ||
+    m.id.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const totalPages = Math.ceil(filteredMakes.length / ITEMS_PER_PAGE);
   const paginatedMakes = filteredMakes.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
@@ -157,7 +159,7 @@ export const MakesView: React.FC = () => {
 
       <div className="max-w-md relative">
         <Search className="absolute top-3 left-3 text-slate-400" size={18} />
-        <Input label="" placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
+        <Input label="" placeholder="Search by name or ID..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
       </div>
 
       <Card className="overflow-hidden">
@@ -189,11 +191,17 @@ export const MakesView: React.FC = () => {
                     <TableRow key={make.id} onClick={() => handleOpenModal(make)}>
                     <TableCell>
                         <span className="font-mono text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-1 rounded">
-                        {make.id}
+                          <HighlightText text={make.id} highlight={searchQuery} />
                         </span>
                     </TableCell>
-                    <TableCell><div className="font-medium text-slate-900">{make.name}</div></TableCell>
-                    <TableCell>{make.nameAr || '-'}</TableCell>
+                    <TableCell>
+                      <div className="font-medium text-slate-900">
+                        <HighlightText text={make.name} highlight={searchQuery} />
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <HighlightText text={make.nameAr || '-'} highlight={searchQuery} />
+                    </TableCell>
                     <TableCell>
                         <div className="flex gap-2" onClick={e => e.stopPropagation()}>
                             <Button variant="ghost" onClick={() => handleOpenModal(make)}><Edit2 size={16} /></Button>
