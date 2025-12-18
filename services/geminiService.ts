@@ -1,16 +1,16 @@
-
-import { api } from './api';
 import { toast } from 'sonner';
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const generateDescription = async (itemName: string, context: string): Promise<string> => {
   try {
-    // Fix: Updated model to 'gemini-3-flash-preview' as per latest guidelines for text tasks.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Generate a concise and professional description for a vehicle item named "${itemName}". Context: ${context}.`,
+      contents: [{
+        parts: [{
+          text: `Generate a concise and professional description for a vehicle item named "${itemName}". Context: ${context}.`
+        }]
+      }],
     });
     return response.text || "";
   } catch (error) {
@@ -22,10 +22,14 @@ export const generateDescription = async (itemName: string, context: string): Pr
 
 export const suggestModels = async (makeName: string): Promise<string[]> => {
   try {
-    // Fix: Updated model to 'gemini-3-flash-preview' as per latest guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `List 5 popular car models for the manufacturer "${makeName}".`,
+      contents: [{
+        parts: [{
+          text: `List 5 popular car models for the manufacturer "${makeName}".`
+        }]
+      }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -35,7 +39,8 @@ export const suggestModels = async (makeName: string): Promise<string[]> => {
               type: Type.ARRAY,
               items: { type: Type.STRING }
             }
-          }
+          },
+          required: ["suggestions"]
         }
       }
     });
@@ -52,10 +57,14 @@ export const suggestModels = async (makeName: string): Promise<string[]> => {
 
 export const suggestMapping = async (adpDescription: string): Promise<{ make: string, model: string } | null> => {
   try {
-    // Fix: Updated model to 'gemini-3-flash-preview' as per latest guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Extract the vehicle Manufacturer (make) and Model from this raw description: "${adpDescription}". If you cannot find them, return empty strings.`,
+      contents: [{
+        parts: [{
+          text: `Extract the vehicle Manufacturer (make) and Model from this raw description: "${adpDescription}". If you cannot find them, return empty strings.`
+        }]
+      }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -63,7 +72,8 @@ export const suggestMapping = async (adpDescription: string): Promise<{ make: st
           properties: {
             make: { type: Type.STRING },
             model: { type: Type.STRING }
-          }
+          },
+          required: ["make", "model"]
         }
       }
     });
