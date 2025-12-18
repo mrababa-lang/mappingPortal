@@ -4,7 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SlashData Vehicle Portal</title>
-    <!-- Tailwind CSS via CDN for quick local setup -->
+    <!-- Shim for process.env to prevent ReferenceErrors in browser -->
+    <script>
+      window.process = window.process || { env: {} };
+    </script>
+    <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
@@ -30,7 +34,6 @@
         background-color: #F8FAFC;
         font-family: 'Inter', sans-serif;
       }
-      /* Custom Scrollbar for a premium feel */
       ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
