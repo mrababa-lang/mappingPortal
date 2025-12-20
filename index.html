@@ -4,7 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SlashData Vehicle Portal</title>
-    <!-- Tailwind CSS via CDN for quick local setup -->
+    <!-- Shim for process.env to prevent ReferenceErrors in browser -->
+    <script>
+      window.process = window.process || { env: {} };
+    </script>
+    <!-- Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script>
@@ -30,7 +34,6 @@
         background-color: #F8FAFC;
         font-family: 'Inter', sans-serif;
       }
-      /* Custom Scrollbar for a premium feel */
       ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -66,12 +69,12 @@
     "react-hook-form": "https://esm.sh/react-hook-form@7.51.2?external=react,react-dom",
     "zod": "https://esm.sh/zod@3.22.4",
     "@hookform/resolvers/zod": "https://esm.sh/@hookform/resolvers@3.3.4/zod?external=react,react-hook-form",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@hookform/resolvers/": "https://esm.sh/@hookform/resolvers@^5.2.2/",
     "xlsx": "https://esm.sh/xlsx@0.18.5",
     "jspdf": "https://esm.sh/jspdf@2.5.1",
     "jspdf-autotable": "https://esm.sh/jspdf-autotable@3.8.1",
-    "axios": "https://esm.sh/axios@^1.13.2"
+    "axios": "https://esm.sh/axios@^1.6.8",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@hookform/resolvers/": "https://esm.sh/@hookform/resolvers@^5.2.2/"
   }
 }
 </script>

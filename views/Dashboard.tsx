@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useDashboardStats, useTrendStats, useActivityLog } from '../hooks/useADPData';
-import { Card, Skeleton } from '../components/UI';
+import { Card, Skeleton, CardSkeleton } from '../components/UI';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LineChart, Line } from 'recharts';
 import { Car, Tags, Settings2, TrendingUp, CheckCircle2, AlertTriangle, FileWarning, Activity, Link, Filter, Clock, ArrowRight } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -10,7 +10,6 @@ export const Dashboard: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   
-  // Sync state with URL
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
 
@@ -30,7 +29,6 @@ export const Dashboard: React.FC = () => {
   const { data: trendData, isLoading: trendLoading } = useTrendStats(dateFrom, dateTo);
   const { data: recentActivity, isLoading: activityLoading } = useActivityLog();
 
-  // Fallback defaults if API returns null/undefined
   const safeStats = stats || {
     totalMakes: 0, totalModels: 0, totalTypes: 0,
     adpTotalMakes: 0, adpTotalModels: 0, adpTotalTypes: 0,
@@ -52,30 +50,9 @@ export const Dashboard: React.FC = () => {
   };
 
   const kpiCards = [
-    { 
-        label: 'Makes', 
-        sdCount: safeStats.totalMakes, 
-        adpCount: safeStats.adpTotalMakes || 0, 
-        icon: Car, 
-        color: 'text-blue-500', 
-        bg: 'bg-blue-50' 
-    },
-    { 
-        label: 'Models', 
-        sdCount: safeStats.totalModels, 
-        adpCount: safeStats.adpTotalModels || 0, 
-        icon: Settings2, 
-        color: 'text-purple-500', 
-        bg: 'bg-purple-50' 
-    },
-    { 
-        label: 'Vehicle Types', 
-        sdCount: safeStats.totalTypes, 
-        adpCount: safeStats.adpTotalTypes || 0, 
-        icon: Tags, 
-        color: 'text-emerald-500', 
-        bg: 'bg-emerald-50' 
-    }
+    { label: 'Makes', sdCount: safeStats.totalMakes, adpCount: safeStats.adpTotalMakes || 0, icon: Car, color: 'text-blue-500', bg: 'bg-blue-50' },
+    { label: 'Models', sdCount: safeStats.totalModels, adpCount: safeStats.adpTotalModels || 0, icon: Settings2, color: 'text-purple-500', bg: 'bg-purple-50' },
+    { label: 'Vehicle Types', sdCount: safeStats.totalTypes, adpCount: safeStats.adpTotalTypes || 0, icon: Tags, color: 'text-emerald-500', bg: 'bg-emerald-50' }
   ];
 
   const totalADPRecords = (safeStats.mappedCount || 0) + (safeStats.unmappedCount || 0);
@@ -103,7 +80,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {kpiCards.map((stat, idx) => {
+        {statsLoading ? [...Array(3)].map((_, i) => <CardSkeleton key={i} />) : kpiCards.map((stat, idx) => {
           const Icon = stat.icon;
           return (
             <Card key={idx} className="p-6 flex items-start justify-between hover:shadow-md transition-shadow group">
@@ -114,15 +91,14 @@ export const Dashboard: React.FC = () => {
                         <Icon size={20} />
                     </div>
                 </div>
-                
                 <div className="grid grid-cols-2 gap-4 divide-x divide-slate-100">
                     <div>
                         <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">SlashData</span>
-                        {statsLoading ? <Skeleton className="h-6 w-12" /> : <h3 className="text-2xl font-bold text-slate-900 leading-none">{stat.sdCount}</h3>}
+                        <h3 className="text-2xl font-bold text-slate-900 leading-none">{stat.sdCount}</h3>
                     </div>
                     <div className="pl-4">
                         <span className="text-[10px] text-slate-400 uppercase font-bold block mb-1">ADP</span>
-                        {statsLoading ? <Skeleton className="h-6 w-12" /> : <h3 className="text-2xl font-bold text-slate-600 leading-none">{stat.adpCount}</h3>}
+                        <h3 className="text-2xl font-bold text-slate-600 leading-none">{stat.adpCount}</h3>
                     </div>
                 </div>
               </div>
@@ -176,17 +152,12 @@ export const Dashboard: React.FC = () => {
            <Card className="p-5 border border-slate-200 shadow-sm bg-gradient-to-br from-white to-slate-50">
               <div className="flex items-center justify-between mb-4">
                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                   <Link size={16} className="text-indigo-600" />
-                   Coverage
+                   <Link size={16} className="text-indigo-600" /> Coverage
                  </h3>
-                 {statsLoading ? <Skeleton className="h-6 w-10" /> : (
-                   <span className={`text-lg font-bold ${mappingCoverage < 80 ? 'text-amber-500' : 'text-emerald-600'}`}>
-                     {mappingCoverage}%
-                   </span>
-                 )}
+                 {statsLoading ? <Skeleton className="h-6 w-10" /> : <span className={`text-lg font-bold ${mappingCoverage < 80 ? 'text-amber-500' : 'text-emerald-600'}`}>{mappingCoverage}%</span>}
               </div>
               <div className="w-full bg-slate-200 rounded-full h-2 mb-2">
-                <div className={`h-2 rounded-full transition-all duration-500 ${mappingCoverage < 100 ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.4)]' : 'bg-emerald-50 shadow-[0_0_8px_rgba(16,185,129,0.4)]'}`} style={{ width: `${mappingCoverage}%` }}></div>
+                <div className={`h-2 rounded-full transition-all duration-500 ${mappingCoverage < 100 ? 'bg-amber-400' : 'bg-emerald-500'}`} style={{ width: `${mappingCoverage}%` }}></div>
               </div>
               <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">SlashData / Total ADP Ratio</p>
            </Card>
@@ -194,8 +165,7 @@ export const Dashboard: React.FC = () => {
            <Card className="flex-1 overflow-hidden flex flex-col h-[500px]">
              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 uppercase tracking-widest">
-                  <Activity size={16} className="text-indigo-500" />
-                  Recent Activity
+                  <Activity size={16} className="text-indigo-500" /> Recent Activity
                 </h3>
              </div>
              <div className="flex-1 overflow-y-auto">
@@ -208,50 +178,25 @@ export const Dashboard: React.FC = () => {
                       </div>
                     ))}
                  </div>
-               ) : !recentActivity || !Array.isArray(recentActivity) || recentActivity.length === 0 ? (
-                 <div className="p-10 text-center flex flex-col items-center gap-3">
-                    <div className="p-3 bg-slate-100 rounded-full">
-                        <Clock className="text-slate-300" size={24} />
-                    </div>
-                    <span className="text-sm text-slate-400 font-medium">No recent activity detected.</span>
-                 </div>
                ) : (
                  <div className="divide-y divide-slate-50">
-                   {recentActivity.map((item: any, i: number) => {
-                     const displayDate = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Just now';
-                     const statusColor = item.status === 'MAPPED' ? 'text-emerald-600' : 'text-amber-600';
-                     const actionLabel = item.status === 'MAPPED' ? 'Mapping confirmed' : 'Mapping updated';
-                     
-                     return (
-                       <div key={item.id || i} className="p-4 hover:bg-slate-50 transition-colors group">
+                   {(recentActivity || []).map((item: any, i: number) => (
+                       <div key={i} className="p-4 hover:bg-slate-50 transition-colors group">
                           <div className="flex justify-between items-start mb-2">
-                             <span className={`text-[10px] font-bold uppercase tracking-wider ${statusColor}`}>
-                                {actionLabel}
+                             <span className={`text-[10px] font-bold uppercase tracking-wider ${item.status === 'MAPPED' ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                {item.status === 'MAPPED' ? 'Mapping confirmed' : 'Mapping updated'}
                              </span>
                              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                                <Clock size={10}/> {displayDate}
+                                <Clock size={10}/> {new Date(item.updatedAt).toLocaleString()}
                              </span>
                           </div>
-                          <div className="flex items-start gap-3">
-                             <div className="mt-1 p-1 bg-slate-100 rounded-md text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-colors">
-                                <ArrowRight size={12} />
-                             </div>
-                             <div className="space-y-1">
-                                <p className="text-xs text-slate-600 leading-snug">
-                                   Vehicle record <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1 rounded">{item.adpMasterId?.substring(0, 8)}...</span> was set to <span className="font-bold">{item.status}</span>.
-                                </p>
-                             </div>
-                          </div>
+                          <p className="text-xs text-slate-600 leading-snug">
+                             Vehicle record <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1 rounded">{item.adpMasterId?.substring(0, 8)}</span> was updated.
+                          </p>
                        </div>
-                     );
-                   })}
+                   ))}
                  </div>
                )}
-             </div>
-             <div className="p-3 border-t border-slate-100 bg-slate-50 text-center">
-                <button onClick={() => navigate('/adp-mapping')} className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest hover:text-indigo-800">
-                    View Full Mapping Log
-                </button>
              </div>
            </Card>
         </div>

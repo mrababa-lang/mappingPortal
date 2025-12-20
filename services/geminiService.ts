@@ -1,16 +1,14 @@
+
 import { toast } from 'sonner';
 import { GoogleGenAI, Type } from "@google/genai";
 
+// Fix: Use direct string for contents and .text property as per @google/genai guidelines
 export const generateDescription = async (itemName: string, context: string): Promise<string> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{
-        parts: [{
-          text: `Generate a concise and professional description for a vehicle item named "${itemName}". Context: ${context}.`
-        }]
-      }],
+      contents: `Generate a concise and professional description for a vehicle item named "${itemName}". Context: ${context}.`,
     });
     return response.text || "";
   } catch (error) {
@@ -20,16 +18,13 @@ export const generateDescription = async (itemName: string, context: string): Pr
   }
 };
 
+// Fix: Use direct string for contents as per @google/genai guidelines
 export const suggestModels = async (makeName: string): Promise<string[]> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{
-        parts: [{
-          text: `List 5 popular car models for the manufacturer "${makeName}".`
-        }]
-      }],
+      contents: `List 5 popular car models for the manufacturer "${makeName}".`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -55,16 +50,13 @@ export const suggestModels = async (makeName: string): Promise<string[]> => {
   }
 };
 
+// Fix: Use direct string for contents as per @google/genai guidelines
 export const suggestMapping = async (adpDescription: string): Promise<{ make: string, model: string } | null> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{
-        parts: [{
-          text: `Extract the vehicle Manufacturer (make) and Model from this raw description: "${adpDescription}". If you cannot find them, return empty strings.`
-        }]
-      }],
+      contents: `Extract the vehicle Manufacturer (make) and Model from this raw description: "${adpDescription}". If you cannot find them, return empty strings.`,
       config: {
         responseMimeType: "application/json",
         responseSchema: {

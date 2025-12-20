@@ -1,11 +1,34 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, Sparkles, ChevronLeft, ChevronRight, ChevronDown, Search, Check, Info, FileX } from 'lucide-react';
+import { X, Loader2, Sparkles, ChevronLeft, ChevronRight, ChevronDown, Search, Check, Info, FileX, Clock } from 'lucide-react';
 
 // --- Skeleton Loader ---
 export const Skeleton: React.FC<{ className?: string }> = ({ className = '' }) => (
   <div className={`animate-pulse bg-slate-200 rounded ${className}`}></div>
+);
+
+export const TableSkeleton: React.FC<{ rows?: number, cols?: number }> = ({ rows = 5, cols = 4 }) => (
+  <div className="w-full space-y-4 p-4">
+    {[...Array(rows)].map((_, i) => (
+      <div key={i} className="flex gap-4">
+        {[...Array(cols)].map((_, j) => (
+          <Skeleton key={j} className="h-10 flex-1" />
+        ))}
+      </div>
+    ))}
+  </div>
+);
+
+export const CardSkeleton: React.FC = () => (
+  <div className="p-6 bg-white rounded-xl border border-slate-200 space-y-4">
+    <div className="flex justify-between">
+      <Skeleton className="h-4 w-24" />
+      <Skeleton className="h-8 w-8 rounded-lg" />
+    </div>
+    <Skeleton className="h-8 w-16" />
+    <Skeleton className="h-2 w-full" />
+  </div>
 );
 
 // --- Highlight Text ---
@@ -19,7 +42,7 @@ export const HighlightText: React.FC<{ text: string; highlight: string }> = ({ t
     <span>
       {parts.map((part, i) => 
         regex.test(part) ? (
-          <mark key={i} className="bg-amber-100 text-amber-900 rounded-sm px-0.5 font-semibold">
+          <mark key={i} className="bg-rose-100 text-rose-900 rounded-sm px-0.5 font-semibold">
             {part}
           </mark>
         ) : (
@@ -222,18 +245,15 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const [coords, setCoords] = useState({ top: 0, left: 0, width: 0 });
   
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null); // New Ref for the Portal Dropdown
+  const dropdownRef = useRef<HTMLDivElement>(null);
   
   const selectedOption = options.find(opt => opt.value === value);
 
-  // Close when clicking outside of BOTH the input wrapper and the portal dropdown
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       const target = event.target as Node;
-      
       const clickedInsideInput = wrapperRef.current && wrapperRef.current.contains(target);
       const clickedInsideDropdown = dropdownRef.current && dropdownRef.current.contains(target);
-
       if (!clickedInsideInput && !clickedInsideDropdown) {
         setIsOpen(false);
       }
@@ -242,36 +262,22 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [wrapperRef, dropdownRef]);
 
-  // Close on scroll to prevent detached popup
   useEffect(() => {
-    const handleScroll = () => {
-      if (isOpen) setIsOpen(false);
-    };
-    if (isOpen) {
-      window.addEventListener('scroll', handleScroll, true);
-    }
+    const handleScroll = () => { if (isOpen) setIsOpen(false); };
+    if (isOpen) window.addEventListener('scroll', handleScroll, true);
     return () => window.removeEventListener('scroll', handleScroll, true);
   }, [isOpen]);
 
-  // Calculate coordinates for Portal
   useEffect(() => {
     if (isOpen && wrapperRef.current) {
       const rect = wrapperRef.current.getBoundingClientRect();
-      setCoords({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width
-      });
+      setCoords({ top: rect.bottom + 4, left: rect.left, width: rect.width });
     }
   }, [isOpen]);
 
-  // Sync search term with value when closed, but clear when opened to search
   useEffect(() => {
-    if (!isOpen && selectedOption) {
-      setSearchTerm(selectedOption.label);
-    } else if (!isOpen && !selectedOption) {
-      setSearchTerm('');
-    }
+    if (!isOpen && selectedOption) setSearchTerm(selectedOption.label);
+    else if (!isOpen && !selectedOption) setSearchTerm('');
   }, [isOpen, selectedOption]);
 
   const filteredOptions = options.filter(opt => 
@@ -282,7 +288,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
     <div className={`space-y-1.5 ${className}`} ref={wrapperRef}>
       <div className="flex justify-between items-baseline">
         <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider ml-1">{label}</label>
-        {error && <span className="text-xs text-red-500 font-medium animate-in fade-in slide-in-from-right-1">{error}</span>}
+        {error && <span className="text-xs text-red-500 font-medium">{error}</span>}
       </div>
       <div className="relative">
         <div 
@@ -298,32 +304,19 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
             className="w-full px-3 py-2.5 bg-transparent border-none focus:outline-none text-slate-900 text-sm placeholder:text-slate-400"
             placeholder={placeholder}
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setIsOpen(true);
-            }}
-            onFocus={() => {
-              setIsOpen(true);
-              setSearchTerm(''); // Clear on focus to show all options
-            }}
+            onChange={(e) => { setSearchTerm(e.target.value); setIsOpen(true); }}
+            onFocus={() => { setIsOpen(true); setSearchTerm(''); }}
             disabled={disabled}
           />
           <div className="mr-3 text-slate-400 cursor-pointer" onClick={() => !disabled && setIsOpen(!isOpen)}>
             <ChevronDown size={16} />
           </div>
         </div>
-
-        {/* Dropdown Portal */}
         {isOpen && !disabled && createPortal(
           <div 
-            ref={dropdownRef} // Attach Ref here to detect clicks inside portal
+            ref={dropdownRef}
             className="fixed z-[9999] bg-white border border-slate-200 rounded-lg shadow-xl overflow-y-auto animate-in fade-in zoom-in-95 duration-100"
-            style={{
-              top: coords.top,
-              left: coords.left,
-              width: coords.width,
-              maxHeight: '240px'
-            }}
+            style={{ top: coords.top, left: coords.left, width: coords.width, maxHeight: '240px' }}
           >
             {filteredOptions.length > 0 ? (
               <ul className="py-1">
@@ -331,11 +324,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   <li 
                     key={opt.value}
                     className={`px-4 py-2 text-sm cursor-pointer flex items-center justify-between group hover:bg-slate-50 ${opt.value === value ? 'bg-slate-50 text-slate-900 font-medium' : 'text-slate-600'}`}
-                    onClick={() => {
-                      onChange(opt.value);
-                      setIsOpen(false);
-                      setSearchTerm(opt.label);
-                    }}
+                    onClick={() => { onChange(opt.value); setIsOpen(false); setSearchTerm(opt.label); }}
                   >
                     {opt.label}
                     {opt.value === value && <Check size={14} className="text-emerald-500" />}
@@ -343,12 +332,9 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 ))}
               </ul>
             ) : (
-              <div className="px-4 py-3 text-sm text-slate-400 text-center">
-                No matching results
-              </div>
+              <div className="px-4 py-3 text-sm text-slate-400 text-center">No matching results</div>
             )}
-          </div>,
-          document.body
+          </div>, document.body
         )}
       </div>
     </div>
@@ -367,7 +353,6 @@ interface ModalProps {
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer }) => {
   if (!isOpen) return null;
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
@@ -378,46 +363,30 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             <X size={20} />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto max-h-[85vh]">
-          {children}
-        </div>
-        {footer && (
-          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
-            {footer}
-          </div>
-        )}
+        <div className="p-6 overflow-y-auto max-h-[85vh]">{children}</div>
+        {footer && <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">{footer}</div>}
       </div>
     </div>
   );
 };
 
 // --- Table ---
-// Fix: Added className prop to TableHeader, TableRow, TableHead, and TableCell to allow external styling and fix TS errors.
 export const TableHeader: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <thead className={`bg-slate-50 border-b border-slate-200 ${className}`}>
+  <thead className={`bg-slate-50 border-b border-slate-200 sticky top-0 z-10 ${className}`}>
     <tr>{children}</tr>
   </thead>
 );
 
 export const TableRow: React.FC<{ children: React.ReactNode; onClick?: () => void; className?: string }> = ({ children, onClick, className = '' }) => (
-  <tr 
-    onClick={onClick}
-    className={`border-b border-slate-100 hover:bg-slate-50 transition-colors last:border-0 cursor-pointer ${className}`}
-  >
-    {children}
-  </tr>
+  <tr onClick={onClick} className={`border-b border-slate-100 hover:bg-slate-50 transition-colors last:border-0 cursor-pointer ${className}`}>{children}</tr>
 );
 
 export const TableHead: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <th className={`px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${className}`}>
-    {children}
-  </th>
+  <th className={`px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider ${className}`}>{children}</th>
 );
 
 export const TableCell: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <td className={`px-6 py-4 text-sm text-slate-600 whitespace-nowrap ${className}`}>
-    {children}
-  </td>
+  <td className={`px-6 py-4 text-sm text-slate-600 whitespace-nowrap ${className}`}>{children}</td>
 );
 
 // --- Pagination ---
@@ -430,27 +399,16 @@ interface PaginationProps {
 
 export const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPageChange, totalItems }) => {
   if (totalPages <= 1) return null;
-
   return (
     <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
        <span className="text-xs text-slate-500">
          Showing page <span className="font-medium">{currentPage}</span> of <span className="font-medium">{totalPages}</span> (<span className="font-medium">{totalItems}</span> items)
        </span>
        <div className="flex gap-2">
-         <Button 
-            variant="secondary" 
-            className="px-2 h-8 text-xs" 
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-         >
+         <Button variant="secondary" className="px-2 h-8 text-xs" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}>
            <ChevronLeft size={14} /> Previous
          </Button>
-         <Button 
-            variant="secondary" 
-            className="px-2 h-8 text-xs"
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-         >
+         <Button variant="secondary" className="px-2 h-8 text-xs" onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages}>
            Next <ChevronRight size={14} />
          </Button>
        </div>
