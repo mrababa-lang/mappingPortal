@@ -1,3 +1,4 @@
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { Make, Model, VehicleType } from '../types';
@@ -14,12 +15,23 @@ const normalizeArray = (data: any): any[] => {
 };
 
 // --- MAKES ---
-export const useMakes = () => {
+export const useMakes = (params?: { page?: number; size?: number; q?: string }) => {
   return useQuery({
-    queryKey: ['makes'],
+    queryKey: ['makes', params],
     queryFn: async () => {
-      const { data } = await api.get<Make[]>('/makes');
-      return normalizeArray(data);
+      const { data } = await api.get('/makes', {
+        params: {
+          page: params?.page ? params.page - 1 : 0,
+          size: params?.size || 20,
+          q: params?.q
+        }
+      });
+      
+      const content = normalizeArray(data);
+      const totalElements = data.totalElements ?? content.length;
+      const totalPages = data.totalPages ?? 1;
+      
+      return { content, totalElements, totalPages };
     }
   });
 };
@@ -34,10 +46,14 @@ export const useCreateMake = () => {
     onMutate: async (newMake) => {
         await queryClient.cancelQueries({ queryKey: ['makes'] });
         const previousMakes = queryClient.getQueryData(['makes']);
-        queryClient.setQueryData(['makes'], (old: Make[] = []) => [
-             { ...newMake, id: newMake.id || 'TEMP_ID', name: newMake.name || 'New Make' } as Make, 
-             ...old
-        ]);
+        queryClient.setQueryData(['makes'], (old: any) => {
+            if (!old) return { content: [newMake], totalElements: 1, totalPages: 1 };
+            return {
+                ...old,
+                content: [{ ...newMake, id: newMake.id || 'TEMP_ID' }, ...old.content].slice(0, old.size || 20),
+                totalElements: (old.totalElements || 0) + 1
+            };
+        });
         return { previousMakes };
     },
     onError: (err, newMake, context) => {
@@ -60,9 +76,13 @@ export const useUpdateMake = () => {
     onMutate: async (updatedMake) => {
         await queryClient.cancelQueries({ queryKey: ['makes'] });
         const previousMakes = queryClient.getQueryData(['makes']);
-        queryClient.setQueryData(['makes'], (old: Make[] = []) => 
-            old.map(m => m.id === updatedMake.id ? updatedMake : m)
-        );
+        queryClient.setQueryData(['makes'], (old: any) => {
+            if (!old) return old;
+            return {
+                ...old,
+                content: old.content.map((m: any) => m.id === updatedMake.id ? updatedMake : m)
+            };
+        });
         return { previousMakes };
     },
     onError: (err, newMake, context) => {
@@ -84,9 +104,14 @@ export const useDeleteMake = () => {
     onMutate: async (id) => {
         await queryClient.cancelQueries({ queryKey: ['makes'] });
         const previousMakes = queryClient.getQueryData(['makes']);
-        queryClient.setQueryData(['makes'], (old: Make[] = []) => 
-            old.filter(m => m.id !== id)
-        );
+        queryClient.setQueryData(['makes'], (old: any) => {
+            if (!old) return old;
+            return {
+                ...old,
+                content: old.content.filter((m: any) => m.id !== id),
+                totalElements: Math.max(0, (old.totalElements || 0) - 1)
+            };
+        });
         return { previousMakes };
     },
     onError: (err, id, context) => {
@@ -97,7 +122,7 @@ export const useDeleteMake = () => {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['makes'] });
-      queryClient.invalidateQueries({ queryKey: ['models'] }); // Models cascade delete
+      queryClient.invalidateQueries({ queryKey: ['models'] });
     },
   });
 };
@@ -139,7 +164,6 @@ export const useCreateModel = () => {
     onMutate: async (newModel) => {
         await queryClient.cancelQueries({ queryKey: ['models'] });
         const previousModels = queryClient.getQueryData(['models']);
-        // Optimistically add to list
         queryClient.setQueryData(['models'], (old: Model[] = []) => [
              { ...newModel, id: newModel.id || 'TEMP', name: newModel.name || 'New Model' } as Model, 
              ...old
@@ -313,10 +337,6 @@ export const useSlashMasterData = (params: { page: number, size: number, q?: str
   return useQuery({
     queryKey: ['slashMaster', params],
     queryFn: async () => {
-      // Fallback: If backend endpoint /api/master/vehicles doesn't exist yet, we can construct it client-side
-      // But adhering to the requirement, we assume the endpoint exists or will exist.
-      // If mock mode, we could manually join useModels with useMakes/useTypes here.
-      
       try {
         const { data } = await api.get('/master/vehicles', { params: {
             page: (params.page || 1) - 1,
@@ -327,8 +347,8 @@ export const useSlashMasterData = (params: { page: number, size: number, q?: str
         }});
 
         const content = normalizeArray(data);
-        const totalElements = data.meta?.totalItems ?? data.totalElements ?? (content.length ? content.length : 0);
-        const totalPages = data.meta?.totalPages ?? data.totalPages ?? 1;
+        const totalElements = data.totalElements ?? (content.length ? content.length : 0);
+        const totalPages = data.totalPages ?? 1;
 
         return {
             content: content,
@@ -336,18 +356,18 @@ export const useSlashMasterData = (params: { page: number, size: number, q?: str
             totalPages: totalPages
         };
       } catch (e) {
-        // Fallback for demo if endpoint not ready: Fetch lists separately
         console.warn("Using fallback client-side join for master data");
         const [modelsRes, makesRes, typesRes] = await Promise.all([
              api.get('/models'),
              api.get('/makes'),
              api.get('/types')
         ]);
+        
+        // Handle paginated responses from makes/models fallback if necessary
         const models = normalizeArray(modelsRes.data);
         const makes = normalizeArray(makesRes.data);
         const types = normalizeArray(typesRes.data);
 
-        // Client side join
         let joined = models.map((m: any) => {
            const make = makes.find((mk:any) => mk.id == (m.makeId || (m.make && m.make.id)));
            const type = types.find((t:any) => t.id == (m.typeId || (m.type && m.type.id)));
@@ -363,7 +383,6 @@ export const useSlashMasterData = (params: { page: number, size: number, q?: str
            };
         });
 
-        // Client side filtering
         if (params.makeId) {
             joined = joined.filter((i:any) => i.makeId === params.makeId);
         }
@@ -404,7 +423,7 @@ export const downloadSlashMasterReport = async (makeId?: string, typeId?: string
         link.click();
         link.remove();
     } catch (e) {
-        console.error("Export failed, falling back to client generation if possible", e);
+        console.error("Export failed", e);
         throw e;
     }
 };

@@ -21,7 +21,9 @@ type ModelFormData = z.infer<typeof modelSchema>;
 
 export const ModelsView: React.FC = () => {
   const { data: models = [], isLoading } = useModels();
-  const { data: makes = [] } = useMakes();
+  // Fix: useMakes returns a paginated object. Access content property.
+  const { data: makesData } = useMakes({ size: 1000 });
+  const makes = makesData?.content || [];
   const { data: types = [] } = useTypes();
   
   const createModel = useCreateModel();
@@ -125,6 +127,7 @@ export const ModelsView: React.FC = () => {
   const getMakeName = (model: any) => {
       if (model.make?.name) return model.make.name;
       const id = getSafeId(model, 'makeId', 'make');
+      // Fix: 'makes' is now an array from makesData.content
       return makes.find(m => m.id == id)?.name || id || '-';
   };
 

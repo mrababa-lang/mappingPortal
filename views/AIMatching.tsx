@@ -70,7 +70,9 @@ export const AIMatchingView: React.FC = () => {
       statusFilter: 'UNMAPPED' 
   });
   
-  const { data: makes = [] } = useMakes();
+  // Fix: useMakes returns a paginated object. Access content property.
+  const { data: makesData } = useMakes({ size: 1000 });
+  const makes = makesData?.content || [];
   const { data: models = [] } = useModels();
   const upsertMapping = useUpsertMapping();
 
@@ -92,6 +94,7 @@ export const AIMatchingView: React.FC = () => {
             const result = await suggestMapping(description);
 
             if (result && result.make) {
+                // Fix: makes is now an array from makesData.content
                 const foundMake = makes.find(m => 
                     m.name.toLowerCase() === result.make.toLowerCase() || 
                     m.id.toLowerCase() === result.make.toLowerCase()

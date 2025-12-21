@@ -14,7 +14,9 @@ export const ADPMakesView: React.FC = () => {
   
   const { data, isLoading, refetch } = useADPUniqueMakes({ page, size: 20, q: searchQuery, status: statusFilter });
   const { data: stats } = useDashboardStats();
-  const { data: sdMakes = [] } = useMakes();
+  // Fix: useMakes returns a paginated object. Access content property.
+  const { data: sdMakesData } = useMakes({ size: 1000 });
+  const sdMakes = sdMakesData?.content || [];
   const saveMappingMutation = useSaveMakeMapping();
 
   // Modal State
@@ -169,7 +171,7 @@ export const ADPMakesView: React.FC = () => {
                     </TableHeader>
                     <tbody className="divide-y divide-slate-100">
                     {(data?.content || []).map((item: any) => {
-                        // Map using various possible ID fields from the backend
+                        // Fix: sdMakes is an array from sdMakesData.content
                         const targetId = item.sdMakeId || item.makeId;
                         const mappedSdMake = sdMakes.find(m => String(m.id) === String(targetId));
                         

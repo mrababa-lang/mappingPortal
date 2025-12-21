@@ -48,7 +48,10 @@ export const ADPMappingView: React.FC = () => {
       statusFilter, dateFrom, dateTo, q
   });
   
-  const { data: makes = [] } = useMakes();
+  // Update makes access to handle paginated object
+  const { data: makesData } = useMakes({ size: 1000 }); // Large size for dropdowns
+  const makes = makesData?.content || [];
+  
   const { data: models = [] } = useModels();
   const { data: config = { enableAI: false } } = useAppConfig();
   

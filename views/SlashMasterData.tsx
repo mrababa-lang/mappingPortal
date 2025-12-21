@@ -22,7 +22,9 @@ export const SlashMasterDataView: React.FC = () => {
   }, [searchQuery]);
 
   const { data: stats } = useDashboardStats();
-  const { data: makes = [] } = useMakes();
+  // Fix: useMakes returns a paginated object. Access content property.
+  const { data: makesData } = useMakes({ size: 1000 });
+  const makes = makesData?.content || [];
   const { data: types = [] } = useTypes();
 
   const { data, isLoading } = useSlashMasterData({ 
