@@ -44,9 +44,8 @@ export const ADPMasterView: React.FC = () => {
   const [selectedAdpId, setSelectedAdpId] = useState<string | null>(null);
   
   const [bulkFile, setBulkFile] = useState<File | null>(null);
-  const [parsedData, setParsedData] = useState<any[] | null>(null);
   const [uploadResult, setUploadResult] = useState<any>(null);
-  const [isParsing, setIsParsing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -78,53 +77,52 @@ export const ADPMasterView: React.FC = () => {
     overscan: 10
   });
 
-  // Automatically parse the file when it is dropped to show row count to user
-  useEffect(() => {
-    if (bulkFile) {
-        setIsParsing(true);
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = e.target?.result;
-                const workbook = XLSX.read(data, { type: 'binary' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
-                setParsedData(jsonData);
-            } catch (err) {
-                toast.error("Failed to parse file structure.");
-            } finally {
-                setIsParsing(false);
-            }
-        };
-        reader.readAsBinaryString(bulkFile);
-    } else {
-        setParsedData(null);
-    }
-  }, [bulkFile]);
-
-  const handleBulkSync = () => {
-      if(!parsedData || parsedData.length === 0) {
-          toast.error("No data found to synchronize.");
+  const handleBulkSync = async () => {
+      if(!bulkFile) {
+          toast.error("Please select a CSV file first.");
           return;
       }
       
-      // We push the ENTIRE parsedData array (thousands of rows) to the backend
-      bulkImport.mutate(parsedData, { 
-          onSuccess: (result: any) => { 
-              setUploadResult(result);
-              setBulkFile(null);
-              setParsedData(null);
-              if (result.recordsAdded === 0 && result.recordsSkipped === 0) {
-                  toast.error("Sync complete but 0 records were processed by server.");
-              } else {
-                  toast.success(`Successfully synchronized ${result.recordsAdded + result.recordsSkipped} records.`); 
+      setIsProcessing(true);
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+          try {
+              const data = e.target?.result;
+              const workbook = XLSX.read(data, { type: 'binary' });
+              const sheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[sheetName];
+              const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+              
+              if (jsonData.length === 0) {
+                  toast.error("The selected file is empty.");
+                  setIsProcessing(false);
+                  return;
               }
-          },
-          onError: (err: any) => {
-            toast.error(err.message || "Bulk synchronization failed");
+
+              // Send the ENTIRE dataset to the backend as JSON
+              bulkImport.mutate(jsonData, { 
+                  onSuccess: (result: any) => { 
+                      setUploadResult(result);
+                      setBulkFile(null);
+                      setIsProcessing(false);
+                      if (result.recordsAdded === 0 && result.recordsSkipped === 0) {
+                          toast.error("Sync complete but 0 records were processed by server.");
+                      } else {
+                          toast.success(`Successfully synchronized ${result.recordsAdded + result.recordsSkipped} records.`); 
+                      }
+                  },
+                  onError: (err: any) => {
+                    setIsProcessing(false);
+                    toast.error(err.message || "Bulk synchronization failed");
+                  }
+              });
+          } catch (err) {
+              setIsProcessing(false);
+              toast.error("Failed to parse CSV file.");
           }
-      });
+      };
+      reader.readAsBinaryString(bulkFile);
   }
 
   const handleDownloadTemplate = () => {
@@ -150,8 +148,7 @@ export const ADPMasterView: React.FC = () => {
     setIsBulkOpen(false);
     setUploadResult(null);
     setBulkFile(null);
-    setParsedData(null);
-    setIsParsing(false);
+    setIsProcessing(false);
   };
 
   const handleOpenEdit = (record?: ADPMaster) => {
@@ -392,6 +389,8 @@ export const ADPMasterView: React.FC = () => {
         )}
       </Card>
 
+      <HistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} adpId={selectedAdpId} />
+
       <Modal 
         isOpen={isEditModalOpen} 
         onClose={() => setIsEditModalOpen(false)} 
@@ -450,7 +449,7 @@ export const ADPMasterView: React.FC = () => {
 
       <Modal isOpen={isBulkOpen} onClose={handleCloseBulk} title="Mass Data Synchronizer" footer={
           !uploadResult ? (
-             <><Button variant="secondary" onClick={handleCloseBulk}>Cancel</Button><Button onClick={handleBulkSync} isLoading={bulkImport.isPending || isParsing} className="px-8 shadow-lg shadow-indigo-500/10" disabled={!parsedData}>Start Bulk Sync</Button></>
+             <><Button variant="secondary" onClick={handleCloseBulk}>Cancel</Button><Button onClick={handleBulkSync} isLoading={bulkImport.isPending || isProcessing} className="px-8 shadow-lg shadow-indigo-500/10" disabled={!bulkFile}>Start Bulk Sync</Button></>
           ) : (
              <Button onClick={handleCloseBulk}>Close Wizard</Button>
           )
@@ -461,8 +460,8 @@ export const ADPMasterView: React.FC = () => {
                     <div className="flex gap-4">
                         <Database size={20} className="shrink-0 text-indigo-500" />
                         <div className="space-y-1">
-                            <p className="text-[13px] text-indigo-700 font-bold">Comprehensive Processing</p>
-                            <p className="text-[12px] text-indigo-600/80 leading-relaxed">The engine will parse every row in your file and push them to the backend in a single synchronized payload.</p>
+                            <p className="text-[13px] text-indigo-700 font-bold">Comprehensive JSON Sync</p>
+                            <p className="text-[12px] text-indigo-600/80 leading-relaxed">Your CSV will be parsed to JSON locally and transmitted in its entirety to the backend for high-performance mapping.</p>
                         </div>
                     </div>
                     <Button variant="secondary" onClick={handleDownloadTemplate} className="w-full h-9 text-xs border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50">
@@ -470,13 +469,13 @@ export const ADPMasterView: React.FC = () => {
                     </Button>
                  </div>
 
-                 {isParsing || bulkImport.isPending ? (
+                 {isProcessing || bulkImport.isPending ? (
                     <div className="p-8 space-y-4 text-center">
                         <div className="flex justify-center">
                             <Loader2 className="animate-spin text-indigo-600" size={32} />
                         </div>
                         <p className="text-sm font-black text-slate-700 uppercase tracking-widest animate-pulse">
-                            {isParsing ? 'Processing Full File...' : 'Synchronizing Thousands of Records...'}
+                            {bulkImport.isPending ? 'Synchronizing Entire Dataset...' : 'Parsing File Locally...'}
                         </p>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">
                             Communicating with secure data nodes...
@@ -495,25 +494,13 @@ export const ADPMasterView: React.FC = () => {
                                 </div>
                             )}
                         </div>
-
-                        {parsedData && (
-                            <div className="p-4 bg-slate-900 rounded-xl flex items-center justify-between border border-slate-700 shadow-xl">
-                                <div className="flex items-center gap-3">
-                                    <ListFilter size={18} className="text-indigo-400" />
-                                    <span className="text-xs font-black text-white uppercase tracking-widest">Pre-Sync Analysis:</span>
-                                </div>
-                                <div className="px-3 py-1 bg-indigo-500 rounded text-[11px] font-black text-white shadow-lg shadow-indigo-500/20">
-                                    {parsedData.length.toLocaleString()} RECORDS READY
-                                </div>
-                            </div>
-                        )}
                     </div>
                  )}
              </div>
          ) : (
              <div className="space-y-6 py-4">
                 <div className={`p-5 rounded-2xl flex items-center gap-4 ${uploadResult.recordsAdded === 0 && uploadResult.recordsSkipped === 0 ? 'bg-rose-50 border border-rose-100' : 'bg-emerald-50 border border-emerald-100'}`}>
-                   <div className={`p-3 rounded-xl shadow-inner ${uploadResult.recordsAdded === 0 && uploadResult.recordsSkipped === 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                   <div className={`p-3 rounded-xl shadow-inner ${uploadResult.recordsAdded === 0 && uploadResult.recordsSkipped === 0 ? 'bg-rose-100 text-rose-600' : uploadResult.errorCount > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
                         {uploadResult.recordsAdded === 0 && uploadResult.recordsSkipped === 0 ? <AlertCircle size={24}/> : <CheckCircle2 size={24}/>}
                    </div>
                    <div>
