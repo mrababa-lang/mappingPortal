@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useADPMaster, useBulkImportADPMaster, useCreateADPMaster, useUpdateADPMaster } from '../hooks/useADPData';
 import { ADPMaster } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, HighlightText, TableSkeleton, EmptyState } from '../components/UI';
-import { Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Plus, Edit3, X, Database, Clock, Layers, Hash, Car, Settings2, Tags, History, FileEdit } from 'lucide-react';
+import { Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Plus, Edit3, X, Database, Clock, Layers, Hash, Car, Settings2, Tags, History, FileEdit, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -87,7 +87,11 @@ export const ADPMasterView: React.FC = () => {
                   setUploadResult(result);
                   setBulkFile(null);
                   setSyncProgress(0);
-                  toast.success(`Successfully processed ${result.totalProcessed} records`); 
+                  if (result.failedChunks > 0) {
+                      toast.warning(`Sync partially complete. ${result.failedChunks} batches failed validation.`);
+                  } else {
+                      toast.success(`Successfully synchronized all ${result.totalProcessed} records.`); 
+                  }
               },
               onError: (err: any) => {
                 setSyncProgress(0);
@@ -213,6 +217,7 @@ export const ADPMasterView: React.FC = () => {
                         >
                             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                                 const item = rows[virtualRow.index];
+                                if (!item) return null;
                                 return (
                                     <tr
                                         key={virtualRow.key}
@@ -407,7 +412,7 @@ export const ADPMasterView: React.FC = () => {
              <div className="space-y-5">
                  <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[13px] text-indigo-700 flex gap-4 leading-relaxed">
                     <Database size={20} className="shrink-0 text-indigo-500" />
-                    <p><strong>Sequential Upsert Logic:</strong> Large files are processed in chunks of 500 records to ensure system stability. Headers like "Make Code" are automatically mapped to system identifiers.</p>
+                    <p><strong>Fault-Tolerant Batching:</strong> Large files (12k+) are processed in small chunks of 100 records. If a specific chunk fails validation, the system will skip it and continue processing the rest of your file.</p>
                  </div>
 
                  {syncProgress > 0 ? (
@@ -422,7 +427,7 @@ export const ADPMasterView: React.FC = () => {
                             Synchronizing: {syncProgress}% Complete
                         </p>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">
-                            Please do not close this window during the process
+                            Processing massive dataset... please do not interrupt.
                         </p>
                     </div>
                  ) : (
@@ -441,28 +446,38 @@ export const ADPMasterView: React.FC = () => {
              </div>
          ) : (
              <div className="space-y-6 py-4">
-                <div className="p-5 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-4">
-                   <div className="p-3 bg-emerald-100 text-emerald-600 rounded-xl shadow-inner">
-                        <CheckCircle2 size={24}/>
+                <div className={`p-5 rounded-2xl flex items-center gap-4 ${uploadResult.failedChunks > 0 ? 'bg-amber-50 border border-amber-100' : 'bg-emerald-50 border border-emerald-100'}`}>
+                   <div className={`p-3 rounded-xl shadow-inner ${uploadResult.failedChunks > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        {uploadResult.failedChunks > 0 ? <AlertCircle size={24}/> : <CheckCircle2 size={24}/>}
                    </div>
                    <div>
-                       <h3 className="font-black text-slate-800 text-lg leading-none mb-1">Synchronization Complete</h3>
-                       <p className="text-sm text-slate-500 font-medium">The ERP source ledger has been fully updated across all environmental nodes.</p>
+                       <h3 className="font-black text-slate-800 text-lg leading-none mb-1">
+                            {uploadResult.failedChunks > 0 ? 'Partial Sync Complete' : 'Synchronization Complete'}
+                       </h3>
+                       <p className="text-sm text-slate-500 font-medium">
+                            {uploadResult.failedChunks > 0 
+                                ? `${uploadResult.failedChunks} data batches failed due to validation rules.` 
+                                : 'The ERP source ledger has been fully updated across all environmental nodes.'}
+                       </p>
                    </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                    <Card className="p-6 bg-white border-slate-100 text-center shadow-sm">
                       <span className="block text-4xl font-black text-emerald-600 tabular-nums mb-1">{uploadResult.recordsAdded || 0}</span>
-                      <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Modified / Created</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Successfully Merged</span>
                    </Card>
                    <Card className="p-6 bg-white border-slate-100 text-center shadow-sm">
                       <span className="block text-4xl font-black text-slate-300 tabular-nums mb-1">{uploadResult.recordsSkipped || 0}</span>
-                      <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Valid Unchanged</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Unchanged Records</span>
                    </Card>
                 </div>
-                <div className="px-4 py-2 bg-slate-50 rounded-lg border border-slate-100 text-center">
+
+                <div className="px-4 py-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total File Integrity Check: {uploadResult.totalProcessed || 0} Records Verified</p>
+                    {uploadResult.failedChunks > 0 && (
+                        <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-2 py-0.5 rounded uppercase">{uploadResult.failedChunks * 100} Estimated Rows Failed</span>
+                    )}
                 </div>
              </div>
          )}

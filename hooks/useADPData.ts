@@ -120,10 +120,14 @@ export const useUpdateADPMaster = () => {
 
 /**
  * Robust Field Mapper for CSV/Excel data
- * Handles variations in headers from external ERP systems
+ * Ensures numeric identifiers and inconsistent descriptions are forced to Strings
  */
 const mapADPFields = (raw: any): Partial<ADPMaster> => {
-  const s = (val: any) => val !== undefined && val !== null ? String(val).trim() : '';
+  const s = (val: any) => {
+    if (val === undefined || val === null) return '';
+    // Handle Excel dates or large numbers that might come in as numbers
+    return String(val).trim();
+  };
   
   return {
     adpMakeId: s(raw["Make Code"] || raw["adpMakeId"] || raw["make_id"]),
@@ -153,10 +157,11 @@ export const useBulkImportADPMaster = (onProgress?: (progress: number) => void) 
        const sheetName = workbook.SheetNames[0];
        const rawData: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
-       // Map fields to match system expectations
+       // Map fields to match system expectations and sanitize types
        const jsonData = rawData.map(mapADPFields);
 
-       const CHUNK_SIZE = 500;
+       // Reduced CHUNK_SIZE for better server stability and fault tolerance
+       const CHUNK_SIZE = 100;
        const chunks = [];
        for (let i = 0; i < jsonData.length; i += CHUNK_SIZE) {
          chunks.push(jsonData.slice(i, i + CHUNK_SIZE));
@@ -164,23 +169,32 @@ export const useBulkImportADPMaster = (onProgress?: (progress: number) => void) 
 
        let totalAdded = 0;
        let totalSkipped = 0;
+       let failedChunks = 0;
 
        for (let i = 0; i < chunks.length; i++) {
          if (onProgress) {
            onProgress(Math.round(((i + 1) / chunks.length) * 100));
          }
          
-         const response = await api.post('/adp/master/bulk', chunks[i]);
-         const result = response.data?.data || response.data || {};
-         
-         totalAdded += (result.recordsAdded || result.addedCount || 0);
-         totalSkipped += (result.recordsSkipped || result.skippedCount || 0);
+         try {
+            const response = await api.post('/adp/master/bulk', chunks[i]);
+            const result = response.data?.data || response.data || {};
+            
+            totalAdded += (result.recordsAdded || result.addedCount || 0);
+            totalSkipped += (result.recordsSkipped || result.skippedCount || 0);
+         } catch (error) {
+            console.error(`Chunk ${i} synchronization failed:`, error);
+            failedChunks++;
+            // We continue processing other chunks even if one fails
+         }
        }
 
        return {
          recordsAdded: totalAdded,
          recordsSkipped: totalSkipped,
-         totalProcessed: jsonData.length
+         totalProcessed: jsonData.length,
+         failedChunks: failedChunks,
+         success: failedChunks === 0
        };
     },
     onSuccess: () => {
