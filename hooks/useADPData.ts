@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { ADPMaster, ADPMapping } from '../types';
 import * as XLSX from 'xlsx';
+import { toast } from 'sonner';
 
 export interface ADPQueryParams {
   q?: string;
@@ -53,7 +54,50 @@ export const useADPMaster = (params: ADPQueryParams) => {
   });
 };
 
-// Fix: Added missing bulk import hook for ADP Master data
+export const useCreateADPMaster = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (record: Partial<ADPMaster>) => {
+      const { data } = await api.post('/adp/master', record);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adpMaster'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    },
+  });
+};
+
+export const useUpdateADPMaster = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (record: ADPMaster) => {
+      const { data } = await api.put(`/adp/master/${encodeURIComponent(record.id)}`, record);
+      return data;
+    },
+    onMutate: async (updatedRecord) => {
+      await queryClient.cancelQueries({ queryKey: ['adpMaster'] });
+      const previous = queryClient.getQueryData(['adpMaster']);
+      queryClient.setQueryData(['adpMaster'], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          content: old.content.map((r: any) => r.id === updatedRecord.id ? updatedRecord : r)
+        };
+      });
+      return { previous };
+    },
+    onError: (err, record, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['adpMaster'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['adpMaster'] });
+    },
+  });
+};
+
 export const useBulkImportADPMaster = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -63,6 +107,7 @@ export const useBulkImportADPMaster = () => {
        const sheetName = workbook.SheetNames[0];
        const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
+       // The backend /bulk endpoint handles upsert (update existing, insert new)
        const response = await api.post('/adp/master/bulk', jsonData);
        return response.data;
     },
