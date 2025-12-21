@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useADPMaster, useBulkImportADPMaster, useCreateADPMaster, useUpdateADPMaster } from '../hooks/useADPData';
 import { ADPMaster } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, HighlightText, TableSkeleton, EmptyState } from '../components/UI';
-import { Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Plus, Edit3, X, Database, Clock, Layers, Hash, Car, Settings2, Tags } from 'lucide-react';
+import { Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Plus, Edit3, X, Database, Clock, Layers, Hash, Car, Settings2, Tags, History, FileEdit } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -67,7 +67,7 @@ export const ADPMasterView: React.FC = () => {
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 92, // Slightly taller for bilingual spacing
+    estimateSize: () => 92, 
     overscan: 10
   });
 
@@ -183,10 +183,10 @@ export const ADPMasterView: React.FC = () => {
                     <table className="w-full border-collapse table-fixed">
                         <TableHeader className="bg-slate-50/90 backdrop-blur-md sticky top-0 z-30 border-b border-slate-200">
                             <TableHead className="w-[22%] h-14 text-[10px] font-black uppercase tracking-widest text-slate-500 pl-8">Manufacturer</TableHead>
-                            <TableHead className="w-[22%] h-14 text-[10px] font-black uppercase tracking-widest text-slate-500">Model Lineage</TableHead>
-                            <TableHead className="w-[22%] h-14 text-[10px] font-black uppercase tracking-widest text-slate-500">Configuration</TableHead>
-                            <TableHead className="w-[22%] h-14 text-[10px] font-black uppercase tracking-widest text-slate-500">Classification</TableHead>
-                            <TableHead className="w-[12%] h-14 text-right pr-8 text-[10px] font-black uppercase tracking-widest text-slate-500">Actions</TableHead>
+                            <TableHead className="w-[20%] h-14 text-[10px] font-black uppercase tracking-widest text-slate-500">Model Lineage</TableHead>
+                            <TableHead className="w-[20%] h-14 text-[10px] font-black uppercase tracking-widest text-slate-500">Configuration</TableHead>
+                            <TableHead className="w-[20%] h-14 text-[10px] font-black uppercase tracking-widest text-slate-500">Classification</TableHead>
+                            <TableHead className="w-[18%] h-14 text-right pr-12 text-[10px] font-black uppercase tracking-widest text-slate-500">Actions</TableHead>
                         </TableHeader>
                         <tbody 
                             className="relative"
@@ -208,7 +208,6 @@ export const ADPMasterView: React.FC = () => {
                                         className="hover:bg-indigo-50/30 transition-all duration-150 flex items-center group border-b border-slate-100/60"
                                         onClick={() => handleOpenEdit(item)}
                                     >
-                                        {/* Manufacturer Column */}
                                         <td className="w-[22%] px-8 py-4 overflow-hidden">
                                             <div className="space-y-1.5">
                                                 <div className="font-black text-slate-900 text-sm leading-tight tracking-tight uppercase">
@@ -228,8 +227,7 @@ export const ADPMasterView: React.FC = () => {
                                                 </div>
                                             </div>
                                         </td>
-                                        {/* Model Column */}
-                                        <td className="w-[22%] px-4 py-4 overflow-hidden">
+                                        <td className="w-[20%] px-4 py-4 overflow-hidden">
                                             <div className="space-y-1.5">
                                                 <div className="font-black text-slate-800 text-sm leading-tight tracking-tight uppercase">
                                                     {item.modelEnDesc ? (
@@ -246,8 +244,7 @@ export const ADPMasterView: React.FC = () => {
                                                 </span>
                                             </div>
                                         </td>
-                                        {/* Type Column */}
-                                        <td className="w-[22%] px-4 py-4 overflow-hidden">
+                                        <td className="w-[20%] px-4 py-4 overflow-hidden">
                                             <div className="space-y-1.5">
                                                 <div className="font-black text-slate-800 text-sm leading-tight tracking-tight uppercase">
                                                     {item.typeEnDesc ? (
@@ -264,8 +261,7 @@ export const ADPMasterView: React.FC = () => {
                                                 </span>
                                             </div>
                                         </td>
-                                        {/* Kind Column */}
-                                        <td className="w-[22%] px-4 py-4 overflow-hidden">
+                                        <td className="w-[20%] px-4 py-4 overflow-hidden">
                                             {item.kindEnDesc || item.kindCode ? (
                                                 <div className="space-y-1.5">
                                                     <div className="flex items-center gap-2">
@@ -287,24 +283,23 @@ export const ADPMasterView: React.FC = () => {
                                                 </div>
                                             )}
                                         </td>
-                                        {/* Actions Column */}
-                                        <td className="w-[12%] px-8 py-4 text-right">
-                                            <div className="flex justify-end gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <td className="w-[18%] px-8 py-4 text-right pr-12">
+                                            <div className="flex justify-end gap-2">
                                                 <Button 
                                                     variant="ghost" 
-                                                    className="h-9 w-9 p-0 rounded-xl hover:bg-indigo-100 hover:text-indigo-700 transition-all" 
+                                                    className="h-9 px-3 rounded-lg hover:bg-indigo-50 text-indigo-600 transition-all border border-indigo-100/30 flex items-center gap-2" 
                                                     onClick={(e) => handleOpenHistory(e, item.id)}
-                                                    title="Audit Trail"
                                                 >
-                                                    <Clock size={16} />
+                                                    <History size={14} />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">Audit</span>
                                                 </Button>
                                                 <Button 
                                                     variant="ghost" 
-                                                    className="h-9 w-9 p-0 rounded-xl hover:bg-slate-900 hover:text-white transition-all shadow-sm" 
+                                                    className="h-9 px-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all shadow-sm flex items-center gap-2" 
                                                     onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }}
-                                                    title="Modify Record"
                                                 >
-                                                    <Edit3 size={16} />
+                                                    <FileEdit size={14} />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest">Edit</span>
                                                 </Button>
                                             </div>
                                         </td>
@@ -315,7 +310,7 @@ export const ADPMasterView: React.FC = () => {
                     </table>
                 </div>
             )}
-            <div className="bg-slate-50/80 border-t border-slate-200 px-4">
+            <div className="bg-slate-50/50 border-t border-slate-100 px-4">
                 <Pagination 
                     currentPage={page} 
                     totalPages={data?.totalPages || 1} 
