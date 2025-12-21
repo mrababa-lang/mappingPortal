@@ -1,0 +1,43 @@
+
+# Backend API Changes - V2 Specification
+
+## Standardized Listing Parameters
+To ensure consistency across all management views (Makes, Models, ADPMaster, ADPMappings), all `GET` listing endpoints MUST support the following query parameters:
+
+### 1. Pagination & Sorting
+- `page` (Integer, Default: 0): The zero-based page index to retrieve.
+- `size` (Integer, Default: 20): The number of records to return per page.
+- `sort` (String, Optional): Sorting criteria in the format `property,asc` or `property,desc`. Default should be `updatedAt,desc` where applicable.
+
+### 2. Global Search
+- `q` (String, Optional): A fuzzy search string. 
+  - For **ADP Master**: Matches against `adpMakeId`, `adpModelId`, `makeEnDesc`, `modelEnDesc`, and `kindEnDesc`.
+  - For **Makes/Models**: Matches against `name`, `nameAr`, and `id`.
+
+### 3. Filtering
+- `status` (String/Enum, Optional): Filter by mapping or record status. 
+  - Values: `MAPPED`, `UNMAPPED`, `MISSING_MAKE`, `MISSING_MODEL`.
+- `makeId` / `adpMakeId` (String, Optional): Filter records belonging to a specific manufacturer.
+- `typeId` (String, Optional): Filter by vehicle classification.
+- `dateFrom` (ISO-8601 Date, Optional): Filter records updated on or after this date.
+- `dateTo` (ISO-8601 Date, Optional): Filter records updated on or before this date.
+
+### 4. Response Structure
+All paginated responses must wrap data in a standardized envelope:
+```json
+{
+  "content": [...],
+  "totalElements": 1500,
+  "totalPages": 75,
+  "size": 20,
+  "number": 0,
+  "numberOfElements": 20,
+  "first": true,
+  "last": false
+}
+```
+
+## Specific Endpoint Updates
+- `GET /api/adp/makes`: Now supports `status` filter (`MAPPED` | `UNMAPPED`).
+- `GET /api/adp/master`: Added support for `kindCode` and `kindEnDesc` searching.
+- `GET /api/master/vehicles`: Joined view now supports filtering by `kindCode`.
