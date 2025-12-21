@@ -57,7 +57,6 @@ export const ADPMasterView: React.FC = () => {
 
   const { data, isLoading } = useADPMaster({ page, size: 50, q: debouncedSearch });
   
-  // Initialize bulk import with a progress callback
   const bulkImport = useBulkImportADPMaster((progress) => {
     setSyncProgress(progress);
   });
@@ -81,21 +80,21 @@ export const ADPMasterView: React.FC = () => {
 
   const handleBulk = () => {
       if(bulkFile) {
-          setSyncProgress(1); // Start indicator
+          setSyncProgress(1);
           bulkImport.mutate(bulkFile, { 
               onSuccess: (result: any) => { 
                   setUploadResult(result);
                   setBulkFile(null);
                   setSyncProgress(0);
-                  if (result.failedChunks > 0) {
-                      toast.warning(`Sync partially complete. ${result.failedChunks} batches failed validation.`);
+                  if (result.failedChunks > 0 || result.errorCount > 0) {
+                      toast.warning(`Sync partially complete with some validation errors.`);
                   } else {
-                      toast.success(`Successfully synchronized all ${result.totalProcessed} records.`); 
+                      toast.success(`Successfully synchronized source ledger.`); 
                   }
               },
               onError: (err: any) => {
                 setSyncProgress(0);
-                toast.error(err.message || "Upload failed");
+                toast.error(err.message || "File upload failed");
               }
           });
       }
@@ -157,7 +156,7 @@ export const ADPMasterView: React.FC = () => {
         </div>
         <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setIsBulkOpen(true)} className="h-11 px-6 bg-white shadow-sm border-slate-200">
-              <Upload size={18} className="text-slate-500" /> Bulk Update
+              <Upload size={18} className="text-slate-500" /> Bulk Sync
             </Button>
             <Button variant="primary" onClick={() => handleOpenEdit()} className="h-11 px-8 bg-slate-900 shadow-lg shadow-slate-900/10 hover:bg-slate-800 transition-all">
               <Plus size={18} /> Add Record
@@ -401,9 +400,9 @@ export const ADPMasterView: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal isOpen={isBulkOpen} onClose={handleCloseBulk} title="Master Bulk Synchronizer" footer={
+      <Modal isOpen={isBulkOpen} onClose={handleCloseBulk} title="Direct Bulk Data Synchronizer" footer={
           !uploadResult ? (
-             <><Button variant="secondary" onClick={handleCloseBulk}>Cancel</Button><Button onClick={handleBulk} isLoading={bulkImport.isPending} className="px-8 shadow-lg shadow-indigo-500/10">Upload & Synchronize</Button></>
+             <><Button variant="secondary" onClick={handleCloseBulk}>Cancel</Button><Button onClick={handleBulk} isLoading={bulkImport.isPending} className="px-8 shadow-lg shadow-indigo-500/10">Upload & Sync</Button></>
           ) : (
              <Button onClick={handleCloseBulk}>Close Wizard</Button>
           )
@@ -412,7 +411,7 @@ export const ADPMasterView: React.FC = () => {
              <div className="space-y-5">
                  <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[13px] text-indigo-700 flex gap-4 leading-relaxed">
                     <Database size={20} className="shrink-0 text-indigo-500" />
-                    <p><strong>Fault-Tolerant Batching:</strong> Large files (12k+) are processed in small chunks of 100 records. If a specific chunk fails validation, the system will skip it and continue processing the rest of your file.</p>
+                    <p><strong>Raw Format Support:</strong> Upload your CSV file directly. The backend handling engine will automatically process all mappings and classification updates in the original source format.</p>
                  </div>
 
                  {syncProgress > 0 ? (
@@ -424,21 +423,21 @@ export const ADPMasterView: React.FC = () => {
                             ></div>
                         </div>
                         <p className="text-sm font-black text-slate-700 uppercase tracking-widest animate-pulse">
-                            Synchronizing: {syncProgress}% Complete
+                            {syncProgress === 100 ? 'Analyzing File Structure...' : `Uploading: ${syncProgress}%`}
                         </p>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">
-                            Processing massive dataset... please do not interrupt.
+                            Streaming data to secure backend node...
                         </p>
                     </div>
                  ) : (
                     <div className="p-10 bg-slate-50 border-2 border-slate-200 rounded-2xl border-dashed flex flex-col items-center justify-center transition-all hover:bg-slate-100 group cursor-pointer relative">
                         <Upload size={48} className="text-slate-300 mb-4 group-hover:text-indigo-400 group-hover:-translate-y-1 transition-all" />
                         <p className="text-sm font-bold text-slate-700 mb-1">Drop your ADP Master CSV here</p>
-                        <p className="text-xs text-slate-400 mb-6">UTF-8 encoded files supported (Max 50MB)</p>
+                        <p className="text-xs text-slate-400 mb-6">File will be uploaded for server-side handling</p>
                         <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer" />
                         {bulkFile && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs animate-in zoom-in-95">
-                                <CheckCircle2 size={14} /> {bulkFile.name} (Ready to Sync)
+                                <CheckCircle2 size={14} /> {bulkFile.name} (Ready to Stream)
                             </div>
                         )}
                     </div>
@@ -446,37 +445,35 @@ export const ADPMasterView: React.FC = () => {
              </div>
          ) : (
              <div className="space-y-6 py-4">
-                <div className={`p-5 rounded-2xl flex items-center gap-4 ${uploadResult.failedChunks > 0 ? 'bg-amber-50 border border-amber-100' : 'bg-emerald-50 border border-emerald-100'}`}>
-                   <div className={`p-3 rounded-xl shadow-inner ${uploadResult.failedChunks > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                        {uploadResult.failedChunks > 0 ? <AlertCircle size={24}/> : <CheckCircle2 size={24}/>}
+                <div className={`p-5 rounded-2xl flex items-center gap-4 ${uploadResult.errorCount > 0 ? 'bg-amber-50 border border-amber-100' : 'bg-emerald-50 border border-emerald-100'}`}>
+                   <div className={`p-3 rounded-xl shadow-inner ${uploadResult.errorCount > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        {uploadResult.errorCount > 0 ? <AlertCircle size={24}/> : <CheckCircle2 size={24}/>}
                    </div>
                    <div>
                        <h3 className="font-black text-slate-800 text-lg leading-none mb-1">
-                            {uploadResult.failedChunks > 0 ? 'Partial Sync Complete' : 'Synchronization Complete'}
+                            Synchronization Processed
                        </h3>
                        <p className="text-sm text-slate-500 font-medium">
-                            {uploadResult.failedChunks > 0 
-                                ? `${uploadResult.failedChunks} data batches failed due to validation rules.` 
-                                : 'The ERP source ledger has been fully updated across all environmental nodes.'}
+                            Backend handler completed the ledger synchronization.
                        </p>
                    </div>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
                    <Card className="p-6 bg-white border-slate-100 text-center shadow-sm">
-                      <span className="block text-4xl font-black text-emerald-600 tabular-nums mb-1">{uploadResult.recordsAdded || 0}</span>
+                      <span className="block text-4xl font-black text-emerald-600 tabular-nums mb-1">{uploadResult.recordsAdded || uploadResult.successCount || 0}</span>
                       <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Successfully Merged</span>
                    </Card>
                    <Card className="p-6 bg-white border-slate-100 text-center shadow-sm">
-                      <span className="block text-4xl font-black text-slate-300 tabular-nums mb-1">{uploadResult.recordsSkipped || 0}</span>
-                      <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Unchanged Records</span>
+                      <span className="block text-4xl font-black text-slate-300 tabular-nums mb-1">{uploadResult.recordsSkipped || uploadResult.skippedCount || 0}</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-black tracking-widest">Validated Unchanged</span>
                    </Card>
                 </div>
 
                 <div className="px-4 py-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total File Integrity Check: {uploadResult.totalProcessed || 0} Records Verified</p>
-                    {uploadResult.failedChunks > 0 && (
-                        <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-2 py-0.5 rounded uppercase">{uploadResult.failedChunks * 100} Estimated Rows Failed</span>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total File Integrity Check Complete</p>
+                    {uploadResult.errorCount > 0 && (
+                        <span className="text-[10px] font-black bg-rose-100 text-rose-600 px-2 py-0.5 rounded uppercase">{uploadResult.errorCount} Rows Failed Validation</span>
                     )}
                 </div>
              </div>

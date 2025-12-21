@@ -2,7 +2,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../services/api';
 import { ADPMaster, ADPMapping } from '../types';
-import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 
 export interface ADPQueryParams {
@@ -118,84 +117,27 @@ export const useUpdateADPMaster = () => {
   });
 };
 
-/**
- * Robust Field Mapper for CSV/Excel data
- * Ensures numeric identifiers and inconsistent descriptions are forced to Strings
- */
-const mapADPFields = (raw: any): Partial<ADPMaster> => {
-  const s = (val: any) => {
-    if (val === undefined || val === null) return '';
-    // Handle Excel dates or large numbers that might come in as numbers
-    return String(val).trim();
-  };
-  
-  return {
-    adpMakeId: s(raw["Make Code"] || raw["adpMakeId"] || raw["make_id"]),
-    makeArDesc: s(raw["Desc AR"] || raw["makeArDesc"] || raw["make_ar"]),
-    makeEnDesc: s(raw["Desc EN"] || raw["makeEnDesc"] || raw["make_en"] || raw["Make Code"]),
-    
-    adpModelId: s(raw["Model Code"] || raw["adpModelId"] || raw["model_id"]),
-    modelArDesc: s(raw["Model Desc Ar"] || raw["modelArDesc"] || raw["model_ar"]),
-    modelEnDesc: s(raw["Model Desc En"] || raw["modelEnDesc"] || raw["model_en"] || raw["Model Code"]),
-    
-    adpTypeId: s(raw["Type Code"] || raw["adpTypeId"] || raw["type_id"]),
-    typeArDesc: s(raw["Type Desc Ar"] || raw["typeArDesc"] || raw["type_ar"]),
-    typeEnDesc: s(raw["Type Desc En"] || raw["typeEnDesc"] || raw["type_en"] || raw["Type Code"]),
-    
-    kindCode: s(raw["Kind Code"] || raw["kind_code"] || raw["kindCode"]),
-    kindArDesc: s(raw["Kind Desc Ar"] || raw["kind_ar_desc"] || raw["kindArDesc"]),
-    kindEnDesc: s(raw["Kind Desc En"] || raw["kind_en_desc"] || raw["kindEnDesc"] || raw["Kind Code"])
-  };
-};
-
 export const useBulkImportADPMaster = (onProgress?: (progress: number) => void) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (file: File) => {
-       const buffer = await file.arrayBuffer();
-       const workbook = XLSX.read(buffer);
-       const sheetName = workbook.SheetNames[0];
-       const rawData: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-       // Map fields to match system expectations and sanitize types
-       const jsonData = rawData.map(mapADPFields);
-
-       // Reduced CHUNK_SIZE for better server stability and fault tolerance
-       const CHUNK_SIZE = 100;
-       const chunks = [];
-       for (let i = 0; i < jsonData.length; i += CHUNK_SIZE) {
-         chunks.push(jsonData.slice(i, i + CHUNK_SIZE));
-       }
-
-       let totalAdded = 0;
-       let totalSkipped = 0;
-       let failedChunks = 0;
-
-       for (let i = 0; i < chunks.length; i++) {
-         if (onProgress) {
-           onProgress(Math.round(((i + 1) / chunks.length) * 100));
-         }
-         
-         try {
-            const response = await api.post('/adp/master/bulk', chunks[i]);
-            const result = response.data?.data || response.data || {};
-            
-            totalAdded += (result.recordsAdded || result.addedCount || 0);
-            totalSkipped += (result.recordsSkipped || result.skippedCount || 0);
-         } catch (error) {
-            console.error(`Chunk ${i} synchronization failed:`, error);
-            failedChunks++;
-            // We continue processing other chunks even if one fails
-         }
-       }
-
-       return {
-         recordsAdded: totalAdded,
-         recordsSkipped: totalSkipped,
-         totalProcessed: jsonData.length,
-         failedChunks: failedChunks,
-         success: failedChunks === 0
-       };
+       const formData = new FormData();
+       formData.append('file', file);
+       
+       const response = await api.post('/adp/master/bulk-upload', formData, {
+         headers: {
+           'Content-Type': 'multipart/form-data',
+         },
+         onUploadProgress: (progressEvent) => {
+           if (onProgress && progressEvent.total) {
+             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+             onProgress(percentCompleted);
+           }
+         },
+       });
+       
+       // Handle standard Spring API response wrapper
+       return response.data?.data || response.data || {};
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adpMaster'] });
