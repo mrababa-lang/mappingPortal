@@ -43,7 +43,7 @@ export const useADPMaster = (params: ADPQueryParams) => {
         params: {
           q: params.q,
           page: (params.page || 1) - 1,
-          size: params.size || 20
+          size: params.size || 50
         } 
       });
       const content = normalizeArray(data);
@@ -68,7 +68,7 @@ export const useCreateADPMaster = () => {
         if (!old) return old;
         return {
           ...old,
-          content: [{ ...newRecord, id: 'temp-' + Date.now() }, ...old.content].slice(0, old.size || 20),
+          content: [{ ...newRecord, id: 'temp-' + Date.now() }, ...old.content].slice(0, old.size || 50),
           totalElements: (old.totalElements || 0) + 1
         };
       });
@@ -119,9 +119,31 @@ export const useUpdateADPMaster = () => {
 };
 
 /**
- * Enhanced Bulk Import with Sequential Chunking
- * Handles large files by splitting the data into manageable chunks
+ * Robust Field Mapper for CSV/Excel data
+ * Handles variations in headers from external ERP systems
  */
+const mapADPFields = (raw: any): Partial<ADPMaster> => {
+  const s = (val: any) => val !== undefined && val !== null ? String(val).trim() : '';
+  
+  return {
+    adpMakeId: s(raw["Make Code"] || raw["adpMakeId"] || raw["make_id"]),
+    makeArDesc: s(raw["Desc AR"] || raw["makeArDesc"] || raw["make_ar"]),
+    makeEnDesc: s(raw["Desc EN"] || raw["makeEnDesc"] || raw["make_en"] || raw["Make Code"]),
+    
+    adpModelId: s(raw["Model Code"] || raw["adpModelId"] || raw["model_id"]),
+    modelArDesc: s(raw["Model Desc Ar"] || raw["modelArDesc"] || raw["model_ar"]),
+    modelEnDesc: s(raw["Model Desc En"] || raw["modelEnDesc"] || raw["model_en"] || raw["Model Code"]),
+    
+    adpTypeId: s(raw["Type Code"] || raw["adpTypeId"] || raw["type_id"]),
+    typeArDesc: s(raw["Type Desc Ar"] || raw["typeArDesc"] || raw["type_ar"]),
+    typeEnDesc: s(raw["Type Desc En"] || raw["typeEnDesc"] || raw["type_en"] || raw["Type Code"]),
+    
+    kindCode: s(raw["Kind Code"] || raw["kind_code"] || raw["kindCode"]),
+    kindArDesc: s(raw["Kind Desc Ar"] || raw["kind_ar_desc"] || raw["kindArDesc"]),
+    kindEnDesc: s(raw["Kind Desc En"] || raw["kind_en_desc"] || raw["kindEnDesc"] || raw["Kind Code"])
+  };
+};
+
 export const useBulkImportADPMaster = (onProgress?: (progress: number) => void) => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -129,7 +151,10 @@ export const useBulkImportADPMaster = (onProgress?: (progress: number) => void) 
        const buffer = await file.arrayBuffer();
        const workbook = XLSX.read(buffer);
        const sheetName = workbook.SheetNames[0];
-       const jsonData: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+       const rawData: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+       // Map fields to match system expectations
+       const jsonData = rawData.map(mapADPFields);
 
        const CHUNK_SIZE = 500;
        const chunks = [];

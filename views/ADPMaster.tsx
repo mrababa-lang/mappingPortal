@@ -30,6 +30,8 @@ const adpMasterSchema = z.object({
 
 type ADPMasterFormData = z.infer<typeof adpMasterSchema>;
 
+const HEADER_HEIGHT = 56; // Matching h-14
+
 export const ADPMasterView: React.FC = () => {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
@@ -85,7 +87,7 @@ export const ADPMasterView: React.FC = () => {
                   setUploadResult(result);
                   setBulkFile(null);
                   setSyncProgress(0);
-                  toast.success("Bulk update processed successfully"); 
+                  toast.success(`Successfully processed ${result.totalProcessed} records`); 
               },
               onError: (err: any) => {
                 setSyncProgress(0);
@@ -207,7 +209,7 @@ export const ADPMasterView: React.FC = () => {
                         </TableHeader>
                         <tbody 
                             className="relative"
-                            style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                            style={{ height: `${rowVirtualizer.getTotalSize() + HEADER_HEIGHT}px` }}
                         >
                             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                                 const item = rows[virtualRow.index];
@@ -220,7 +222,7 @@ export const ADPMasterView: React.FC = () => {
                                             left: 0,
                                             width: '100%',
                                             height: `${virtualRow.size}px`,
-                                            transform: `translateY(${virtualRow.start}px)`
+                                            transform: `translateY(${virtualRow.start + HEADER_HEIGHT}px)`
                                         }}
                                         className="hover:bg-indigo-50/30 transition-all duration-150 flex items-center group border-b border-slate-100/60"
                                         onClick={() => handleOpenEdit(item)}
@@ -405,7 +407,7 @@ export const ADPMasterView: React.FC = () => {
              <div className="space-y-5">
                  <div className="p-5 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-[13px] text-indigo-700 flex gap-4 leading-relaxed">
                     <Database size={20} className="shrink-0 text-indigo-500" />
-                    <p><strong>Sequential Upsert Logic:</strong> Large files are processed in chunks of 500 records to ensure system stability. Existing records are updated, and new ones are appended.</p>
+                    <p><strong>Sequential Upsert Logic:</strong> Large files are processed in chunks of 500 records to ensure system stability. Headers like "Make Code" are automatically mapped to system identifiers.</p>
                  </div>
 
                  {syncProgress > 0 ? (
