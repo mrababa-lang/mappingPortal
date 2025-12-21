@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { commonValidators } from '../utils/validation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { HistoryModal } from '../components/HistoryModal';
+import * as XLSX from 'xlsx';
 
 const adpMasterSchema = z.object({
   id: z.string().optional(),
@@ -44,7 +45,7 @@ export const ADPMasterView: React.FC = () => {
   
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<any>(null);
-  const [syncProgress, setSyncProgress] = useState(0);
+  const [isParsing, setIsParsing] = useState(false);
 
   // Debounce search
   useEffect(() => {
@@ -57,9 +58,7 @@ export const ADPMasterView: React.FC = () => {
 
   const { data, isLoading } = useADPMaster({ page, size: 50, q: debouncedSearch });
   
-  const bulkImport = useBulkImportADPMaster((progress) => {
-    setSyncProgress(progress);
-  });
+  const bulkImport = useBulkImportADPMaster();
   
   const createRecord = useCreateADPMaster();
   const updateRecord = useUpdateADPMaster();
@@ -78,25 +77,43 @@ export const ADPMasterView: React.FC = () => {
     overscan: 10
   });
 
-  const handleBulk = () => {
-      if(bulkFile) {
-          setSyncProgress(1);
-          bulkImport.mutate(bulkFile, { 
-              onSuccess: (result: any) => { 
-                  setUploadResult(result);
-                  setBulkFile(null);
-                  setSyncProgress(0);
-                  if (result.recordsAdded === 0 && result.recordsSkipped === 0) {
-                      toast.error("Sync complete but 0 records were processed. Check column headers.");
-                  } else {
-                      toast.success(`Successfully synchronized source ledger.`); 
+  const handleBulk = async () => {
+      if(!bulkFile) return;
+      
+      setIsParsing(true);
+      try {
+          const reader = new FileReader();
+          reader.onload = async (e) => {
+              const data = e.target?.result;
+              const workbook = XLSX.read(data, { type: 'binary' });
+              const sheetName = workbook.SheetNames[0];
+              const worksheet = workbook.Sheets[sheetName];
+              const jsonData = XLSX.utils.sheet_to_json(worksheet);
+              
+              setIsParsing(false);
+              bulkImport.mutate(jsonData, { 
+                  onSuccess: (result: any) => { 
+                      setUploadResult(result);
+                      setBulkFile(null);
+                      if (result.recordsAdded === 0 && result.recordsSkipped === 0) {
+                          toast.error("Sync complete but 0 records were processed. Check column headers.");
+                      } else {
+                          toast.success(`Successfully synchronized source ledger.`); 
+                      }
+                  },
+                  onError: (err: any) => {
+                    toast.error(err.message || "Bulk synchronization failed");
                   }
-              },
-              onError: (err: any) => {
-                setSyncProgress(0);
-                toast.error(err.message || "File upload failed");
-              }
-          });
+              });
+          };
+          reader.onerror = () => {
+              setIsParsing(false);
+              toast.error("Failed to read file.");
+          };
+          reader.readAsBinaryString(bulkFile);
+      } catch (err) {
+          setIsParsing(false);
+          toast.error("Error parsing CSV file.");
       }
   }
 
@@ -122,8 +139,8 @@ export const ADPMasterView: React.FC = () => {
   const handleCloseBulk = () => {
     setIsBulkOpen(false);
     setUploadResult(null);
-    setSyncProgress(0);
     setBulkFile(null);
+    setIsParsing(false);
   };
 
   const handleOpenEdit = (record?: ADPMaster) => {
@@ -421,7 +438,7 @@ export const ADPMasterView: React.FC = () => {
 
       <Modal isOpen={isBulkOpen} onClose={handleCloseBulk} title="Direct Bulk Data Synchronizer" footer={
           !uploadResult ? (
-             <><Button variant="secondary" onClick={handleCloseBulk}>Cancel</Button><Button onClick={handleBulk} isLoading={bulkImport.isPending} className="px-8 shadow-lg shadow-indigo-500/10">Upload & Sync</Button></>
+             <><Button variant="secondary" onClick={handleCloseBulk}>Cancel</Button><Button onClick={handleBulk} isLoading={bulkImport.isPending || isParsing} className="px-8 shadow-lg shadow-indigo-500/10">Upload & Sync</Button></>
           ) : (
              <Button onClick={handleCloseBulk}>Close Wizard</Button>
           )
@@ -432,8 +449,8 @@ export const ADPMasterView: React.FC = () => {
                     <div className="flex gap-4">
                         <Database size={20} className="shrink-0 text-indigo-500" />
                         <div className="space-y-1">
-                            <p className="text-[13px] text-indigo-700 font-bold">Raw Format Integrity</p>
-                            <p className="text-[12px] text-indigo-600/80 leading-relaxed">Upload your CSV. The backend handles fuzzy mapping for columns like <strong>"Kind Code"</strong> or <strong>"kindendesc"</strong> automatically.</p>
+                            <p className="text-[13px] text-indigo-700 font-bold">JSON Data Processing</p>
+                            <p className="text-[12px] text-indigo-600/80 leading-relaxed">Your CSV will be converted to JSON locally before being transmitted to the backend for high-performance processing.</p>
                         </div>
                     </div>
                     <Button variant="secondary" onClick={handleDownloadTemplate} className="w-full h-9 text-xs border-indigo-200 text-indigo-700 bg-white hover:bg-indigo-50">
@@ -441,30 +458,27 @@ export const ADPMasterView: React.FC = () => {
                     </Button>
                  </div>
 
-                 {syncProgress > 0 ? (
+                 {isParsing || bulkImport.isPending ? (
                     <div className="p-8 space-y-4 text-center">
-                        <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200 shadow-inner">
-                            <div 
-                                className="bg-indigo-600 h-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(79,70,229,0.3)]"
-                                style={{ width: `${syncProgress}%` }}
-                            ></div>
+                        <div className="flex justify-center">
+                            <Loader2 className="animate-spin text-indigo-600" size={32} />
                         </div>
                         <p className="text-sm font-black text-slate-700 uppercase tracking-widest animate-pulse">
-                            {syncProgress === 100 ? 'Analyzing File Structure...' : `Uploading: ${syncProgress}%`}
+                            {isParsing ? 'Parsing CSV Locally...' : 'Syncing JSON Data...'}
                         </p>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest italic">
-                            Streaming data to secure backend node...
+                            Processing source records for transmission...
                         </p>
                     </div>
                  ) : (
                     <div className="p-10 bg-slate-50 border-2 border-slate-200 rounded-2xl border-dashed flex flex-col items-center justify-center transition-all hover:bg-slate-100 group cursor-pointer relative">
                         <Upload size={48} className="text-slate-300 mb-4 group-hover:text-indigo-400 group-hover:-translate-y-1 transition-all" />
                         <p className="text-sm font-bold text-slate-700 mb-1">Drop your ADP Master CSV here</p>
-                        <p className="text-xs text-slate-400 mb-6">File will be uploaded for server-side handling</p>
+                        <p className="text-xs text-slate-400 mb-6">File will be parsed to JSON and handled by the server</p>
                         <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} className="absolute inset-0 opacity-0 cursor-pointer" />
                         {bulkFile && (
                             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs animate-in zoom-in-95">
-                                <CheckCircle2 size={14} /> {bulkFile.name} (Ready to Stream)
+                                <CheckCircle2 size={14} /> {bulkFile.name} (Ready to Parse)
                             </div>
                         )}
                     </div>

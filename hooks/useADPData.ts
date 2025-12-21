@@ -117,24 +117,12 @@ export const useUpdateADPMaster = () => {
   });
 };
 
-export const useBulkImportADPMaster = (onProgress?: (progress: number) => void) => {
+export const useBulkImportADPMaster = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (file: File) => {
-       const formData = new FormData();
-       formData.append('file', file);
-       
-       const response = await api.post('/adp/master/bulk-upload', formData, {
-         headers: {
-           'Content-Type': 'multipart/form-data',
-         },
-         onUploadProgress: (progressEvent) => {
-           if (onProgress && progressEvent.total) {
-             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-             onProgress(percentCompleted);
-           }
-         },
-       });
+    mutationFn: async (jsonData: any[]) => {
+       // Send the raw JSON array to the backend
+       const response = await api.post('/adp/master/bulk-upload', jsonData);
        
        // Handle standard Spring API response wrapper
        return response.data?.data || response.data || {};

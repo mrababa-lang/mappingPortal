@@ -1,3 +1,4 @@
+
 # SlashData Vehicle Portal - Backend Technical Specification
 
 ## 1. Authentication & Security
@@ -6,20 +7,17 @@
 - **Role Enforcement**: `ADMIN`, `MAPPING_ADMIN`, `MAPPING_USER`.
 
 ## 2. ADP Master Hub - Bulk Upload Specification
-The system handles raw multipart CSV uploads. Given inconsistent source formatting, the backend MUST implement fuzzy header mapping.
+The system handles raw JSON data payloads for synchronization.
 
 - **Endpoint**: `POST /api/adp/master/bulk-upload`
-- **Consumes**: `multipart/form-data` (field: `file`)
+- **Consumes**: `application/json`
+- **Payload**: An array of objects representing the source CSV rows.
 
 ### Backend Processing Requirements:
-1. **Fuzzy Header Normalization**: 
-   Before processing, the backend must normalize all CSV headers by:
-   - Converting to lowercase.
-   - Removing all spaces and underscores.
-   - Example: "Kind Code" becomes "kindcode", "kindEnDesc" becomes "kindendesc".
+1. **JSON Parsing**: The backend should parse the incoming JSON array. Each object will contain keys derived from the CSV headers.
 
-2. **Column Mapping Aliases**:
-   Map normalized headers to the following internal fields:
+2. **Column Mapping Aliases (Normalized Keys)**:
+   The backend should perform case-insensitive matching or normalization of keys:
    - `adpMakeId`: "adpmakeid", "makecode", "makeid"
    - `makeEnDesc`: "makeendesc", "descen", "makeen"
    - `makeArDesc`: "makeardesc", "descar", "makear"
@@ -52,4 +50,4 @@ The system handles raw multipart CSV uploads. Given inconsistent source formatti
 
 ## 3. Performance Targets
 - **Throughput**: 15,000 rows / 10s.
-- **Memory**: Use Streaming API (do not load full file into RAM).
+- **Memory**: The backend should efficiently handle the JSON payload (consider streaming JSON parsing if memory constraints exist).
