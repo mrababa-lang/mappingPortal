@@ -1,0 +1,105 @@
+
+# SlashData Vehicle Portal - Enhancement Roadmap
+
+This document outlines the current feature set of the portal and provides a detailed backlog of potential design, functional, and architectural improvements for each view.
+
+---
+
+## 1. Global / Layout
+**Current State:** Responsive sidebar navigation with role-based access control (RBAC).
+- **Design Enhancements:**
+    - Implementation of a "Dark Mode" toggle using Tailwind's dark class engine.
+    - RTL (Right-to-Left) support for Arabic users, shifting the layout dynamically.
+    - Sticky table headers with subtle shadows during scroll.
+- **Functional Additions:**
+    - Global "Quick Search" (Cmd+K) to find any vehicle or user from anywhere in the app.
+    - Real-time notification bell for new items entering the Review Queue.
+- **UX Improvements:**
+    - Persistent sidebar state (collapsed/expanded) saved to LocalStorage.
+
+---
+
+## 2. Dashboard (System Overview)
+**Current State:** KPI cards, mapping distribution bar chart, and recent activity feed.
+- **Design Enhancements:**
+    - Animated counter for KPIs (rolling numbers effect).
+    - Pie charts for "Vehicle Type Distribution" across the entire master database.
+- **Functional Additions:**
+    - "Export Dashboard" button to generate a summary PDF for management.
+    - Clickable activity feed items that navigate directly to the record being edited.
+- **UX Improvements:**
+    - "Pulse" effect on metrics that have changed in the last 60 minutes.
+
+---
+
+## 3. Vehicle Master (Makes, Models, Types)
+**Current State:** CRUD operations with Zod validation and CSV bulk import.
+- **Design Enhancements:**
+    - Visual indicators (colors/logos) for major manufacturers in the list.
+    - Multi-line row support for long descriptions with "Read More" expansion.
+- **Functional Additions:**
+    - "Image Upload" for Vehicle Types (visual references for SUV, Hatchback, etc.).
+    - "Active/Inactive" toggle per record to hide legacy models from new mappings.
+- **UX Improvements:**
+    - Inline editing (one-click edit on cell) instead of opening a full modal.
+
+---
+
+## 4. ADP Master List
+**Current State:** Virtualized table for high-performance viewing of source data with manual add/edit.
+- **Design Enhancements:**
+    - Color-coded "ADP Source" badges to identify which specific ERP system the record came from.
+- **Functional Additions:**
+    - "Duplicate Checker": Highlight records with identical descriptions but different IDs.
+    - "Advanced Export": Filter by specific date range and manufacturer before exporting to CSV.
+- **UX Improvements:**
+    - Column resizing for better readability of long vehicle descriptions.
+
+---
+
+## 5. AI Matching Workspace
+**Current State:** Gemini-powered batch analysis with interactive confidence gauges.
+- **Design Enhancements:**
+    - Full-screen "Distraction Free" mode for high-volume mapping sessions.
+    - Color-coded rows based on confidence (Green > 90%, Yellow > 75%, Red < 75%).
+- **Functional Additions:**
+    - "Multi-Select Approve": Checkbox-based bulk confirmation of high-confidence AI suggestions.
+    - "AI Reasoning": A small tooltip explaining *why* the AI chose a specific model.
+- **UX Improvements:**
+    - Keyboard shortcuts (A for Approve, R for Reject) to speed up human verification.
+
+---
+
+## 6. Manual Mapping & Review Queue
+**Current State:** Form-based mapping with history audit and approval workflow.
+- **Design Enhancements:**
+    - "Side-by-Side" comparison view of source vs. target data for easier verification.
+- **Functional Additions:**
+    - "Rejection Reason": Mandatory text field when a mapping is rejected.
+    - "Auto-Assign": Automatically assign new items in the queue to specific team members.
+- **UX Improvements:**
+    - "Undo" button for recently approved/rejected items (10-second grace period).
+
+---
+
+## 7. Audit Log & Tracking
+**Current State:** Simple table showing recent mapping activities.
+- **Design Enhancements:**
+    - "Diff View": Visual highlighting of exactly which fields changed (Red for old, Green for new).
+- **Functional Additions:**
+    - Advanced filtering by "Action Type" (Manual vs. AI vs. Bulk).
+    - "User Performance Metrics": Chart showing mapping speed and accuracy per user.
+- **UX Improvements:**
+    - Link to "History Timeline" modal directly from any record in the log.
+
+---
+
+## 8. Configuration & System
+**Current State:** AI settings, maintenance mode, and audit logging toggles.
+- **Design Enhancements:**
+    - Grouping settings into "General," "AI Model," and "Security" sections.
+- **Functional Additions:**
+    - "Backup & Restore": System-wide DB snapshot trigger.
+    - "AI Prompt Customization": Allow admins to tweak the instructions sent to Gemini.
+- **UX Improvements:**
+    - "Test API Connection" button to verify backend availability and AI credentials.

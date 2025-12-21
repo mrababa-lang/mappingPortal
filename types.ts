@@ -103,13 +103,14 @@ export interface User {
 
 export interface AppConfig {
   enableAI: boolean;
-  apiKey?: string; // Optional user-configured API Key
+  aiProvider: 'gemini' | 'openai';
+  apiKey?: string;
   aiConfidenceThreshold: number; // 0-100
+  systemInstruction: string;
   maintenanceMode: boolean;
   enableAuditLog: boolean;
 }
 
-// Fix: Added 'adp-matching' to the list of allowed ViewStates
 export type ViewState = 'login' | 'dashboard' | 'types' | 'makes' | 'models' | 'slash-master' | 'adp-master' | 'adp-makes' | 'adp-types' | 'adp-matching' | 'adp-mapping' | 'adp-mapped-vehicles' | 'mapping-review' | 'users' | 'tracking' | 'configuration';
 
 export interface NavItem {

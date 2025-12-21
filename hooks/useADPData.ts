@@ -61,7 +61,26 @@ export const useCreateADPMaster = () => {
       const { data } = await api.post('/adp/master', record);
       return data;
     },
-    onSuccess: () => {
+    onMutate: async (newRecord) => {
+      await queryClient.cancelQueries({ queryKey: ['adpMaster'] });
+      const previous = queryClient.getQueryData(['adpMaster']);
+      queryClient.setQueryData(['adpMaster'], (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          content: [{ ...newRecord, id: 'temp-' + Date.now() }, ...old.content].slice(0, old.size || 20),
+          totalElements: (old.totalElements || 0) + 1
+        };
+      });
+      return { previous };
+    },
+    onError: (err, newRecord, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['adpMaster'], context.previous);
+      }
+      toast.error("Failed to create record");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['adpMaster'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
     },
@@ -91,6 +110,7 @@ export const useUpdateADPMaster = () => {
       if (context?.previous) {
         queryClient.setQueryData(['adpMaster'], context.previous);
       }
+      toast.error("Failed to update record");
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['adpMaster'] });

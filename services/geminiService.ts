@@ -2,13 +2,15 @@
 import { toast } from 'sonner';
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Fix: Use direct string for contents and .text property as per @google/genai guidelines
-export const generateDescription = async (itemName: string, context: string): Promise<string> => {
+export const generateDescription = async (itemName: string, context: string, systemInstruction?: string): Promise<string> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Generate a concise and professional description for a vehicle item named "${itemName}". Context: ${context}.`,
+      config: {
+        systemInstruction: systemInstruction || "You are a professional vehicle data specialist. Provide technical and accurate descriptions."
+      }
     });
     return response.text || "";
   } catch (error) {
@@ -18,14 +20,14 @@ export const generateDescription = async (itemName: string, context: string): Pr
   }
 };
 
-// Fix: Use direct string for contents as per @google/genai guidelines
-export const suggestModels = async (makeName: string): Promise<string[]> => {
+export const suggestModels = async (makeName: string, systemInstruction?: string): Promise<string[]> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `List 5 popular car models for the manufacturer "${makeName}".`,
       config: {
+        systemInstruction: systemInstruction || "You are a professional automotive researcher.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -50,14 +52,14 @@ export const suggestModels = async (makeName: string): Promise<string[]> => {
   }
 };
 
-// Fix: Use direct string for contents as per @google/genai guidelines
-export const suggestMapping = async (adpDescription: string): Promise<{ make: string, model: string } | null> => {
+export const suggestMapping = async (adpDescription: string, systemInstruction?: string): Promise<{ make: string, model: string } | null> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Extract the vehicle Manufacturer (make) and Model from this raw description: "${adpDescription}". If you cannot find them, return empty strings.`,
       config: {
+        systemInstruction: systemInstruction || "You are a data cleaning specialist specializing in automotive ERP exports. Match raw strings to normalized vehicle makes and models.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,

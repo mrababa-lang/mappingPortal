@@ -1,17 +1,19 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useADPMaster, useBulkImportADPMaster, useCreateADPMaster, useUpdateADPMaster } from '../hooks/useADPData';
 import { ADPMaster } from '../types';
 import { Card, Button, Input, Modal, TableHeader, TableHead, TableRow, TableCell, Pagination, HighlightText, TableSkeleton, EmptyState } from '../components/UI';
-import { Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Plus, Edit3, X, Database } from 'lucide-react';
+import { Upload, Search, Loader2, Download, CheckCircle2, AlertTriangle, Plus, Edit3, X, Database, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { commonValidators } from '../utils/validation';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import { HistoryModal } from '../components/HistoryModal';
 
 const adpMasterSchema = z.object({
-  id: z.string().optional(), // Internal DB ID if updating
+  id: z.string().optional(),
   adpMakeId: commonValidators.requiredString,
   makeEnDesc: commonValidators.requiredString,
   makeArDesc: commonValidators.arabicText,
@@ -27,21 +29,43 @@ type ADPMasterFormData = z.infer<typeof adpMasterSchema>;
 
 export const ADPMasterView: React.FC = () => {
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedAdpId, setSelectedAdpId] = useState<string | null>(null);
   
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [uploadResult, setUploadResult] = useState<any>(null);
 
-  const { data, isLoading } = useADPMaster({ page, size: 20, q: search });
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const { data, isLoading } = useADPMaster({ page, size: 50, q: debouncedSearch });
   const bulkImport = useBulkImportADPMaster();
   const createRecord = useCreateADPMaster();
   const updateRecord = useUpdateADPMaster();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<ADPMasterFormData>({
     resolver: zodResolver(adpMasterSchema)
+  });
+
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rows = data?.content || [];
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 64,
+    overscan: 10
   });
 
   const handleBulk = () => {
@@ -91,11 +115,10 @@ export const ADPMasterView: React.FC = () => {
     }
   };
 
-  const handleCloseBulk = () => {
-    setIsBulkOpen(false);
-    setBulkFile(null);
-    setUploadResult(null);
-    bulkImport.reset();
+  const handleOpenHistory = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setSelectedAdpId(id);
+    setIsHistoryOpen(true);
   };
 
   const handleDownloadSample = () => {
@@ -113,11 +136,11 @@ export const ADPMasterView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="space-y-6 flex flex-col h-full overflow-hidden">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 shrink-0">
         <div>
            <h1 className="text-2xl font-bold text-slate-900">ADP Master List</h1>
-           <p className="text-slate-500">Source data integration from ADP ERP systems.</p>
+           <p className="text-slate-500">Source data integration with upsert capability and history audit.</p>
         </div>
         <div className="flex gap-2">
             <Button variant="secondary" onClick={() => setIsBulkOpen(true)}><Upload size={18} /> Bulk Update</Button>
@@ -125,19 +148,19 @@ export const ADPMasterView: React.FC = () => {
         </div>
       </div>
 
-      <Card className="p-4 bg-white border border-slate-200">
+      <Card className="p-4 bg-white border border-slate-200 shrink-0">
         <div className="flex items-center gap-4">
             <div className="relative flex-1 max-w-md">
                 <Search className="absolute top-3 left-3 text-slate-400" size={18} />
                 <Input 
                     label="" 
                     placeholder="Search Make, Model, or ID..." 
-                    value={search} 
-                    onChange={e => { setSearch(e.target.value); setPage(1); }} 
+                    value={searchQuery} 
+                    onChange={e => setSearchQuery(e.target.value)} 
                     className="pl-10 h-11"
                 />
-                {search && (
-                    <button onClick={() => setSearch('')} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600">
+                {searchQuery && (
+                    <button onClick={() => setSearchQuery('')} className="absolute top-3 right-3 text-slate-400 hover:text-slate-600">
                         <X size={16} />
                     </button>
                 )}
@@ -148,10 +171,10 @@ export const ADPMasterView: React.FC = () => {
         </div>
       </Card>
 
-      <Card className="overflow-hidden border border-slate-200">
-        {isLoading ? <TableSkeleton rows={10} cols={3} /> : (
+      <Card className="flex-1 overflow-hidden flex flex-col min-h-0 border border-slate-200">
+        {isLoading ? <TableSkeleton rows={12} cols={4} /> : (
         <>
-            {(data?.content || []).length === 0 ? (
+            {rows.length === 0 ? (
                 <EmptyState 
                     title="No Master Records"
                     description="Upload your first ADP Master CSV or add a record manually."
@@ -159,56 +182,78 @@ export const ADPMasterView: React.FC = () => {
                     action={<Button onClick={() => handleOpenEdit()}><Plus size={16} /> Add Record</Button>}
                 />
             ) : (
-                <div className="overflow-x-auto">
-                <table className="w-full">
-                    <TableHeader>
-                        <TableHead>Manufacturer (ADP)</TableHead>
-                        <TableHead>Model Description</TableHead>
-                        <TableHead>Vehicle Type</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableHeader>
-                    <tbody>
-                        {(data?.content || []).map((item: ADPMaster) => (
-                            <TableRow key={item.id} onClick={() => handleOpenEdit(item)}>
-                                <TableCell>
-                                    <div className="space-y-1">
-                                        <div className="font-bold text-slate-900 text-sm">
-                                            <HighlightText text={item.makeEnDesc} highlight={search} />
-                                        </div>
-                                        <span className="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
-                                            <HighlightText text={item.adpMakeId} highlight={search} />
-                                        </span>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="space-y-1">
-                                        <div className="font-medium text-slate-700 text-sm">
-                                            <HighlightText text={item.modelEnDesc} highlight={search} />
-                                        </div>
-                                        <span className="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
-                                            <HighlightText text={item.adpModelId} highlight={search} />
-                                        </span>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <div className="space-y-1">
-                                        <div className="font-medium text-slate-700 text-sm">
-                                            <HighlightText text={item.typeEnDesc} highlight={search} />
-                                        </div>
-                                        <span className="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
-                                            {item.adpTypeId}
-                                        </span>
-                                    </div>
-                                </TableCell>
-                                <TableCell className="text-right">
-                                    <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }}>
-                                        <Edit3 size={14} className="text-slate-400" />
-                                    </Button>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                    </tbody>
-                </table>
+                <div ref={parentRef} className="flex-1 overflow-auto">
+                    <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}>
+                        <table className="w-full">
+                            <TableHeader>
+                                <TableHead className="w-1/4">Manufacturer (ADP)</TableHead>
+                                <TableHead className="w-1/4">Model Description</TableHead>
+                                <TableHead className="w-1/4">Vehicle Type</TableHead>
+                                <TableHead className="w-1/4 text-right">Actions</TableHead>
+                            </TableHeader>
+                            <tbody>
+                                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                                    const item = rows[virtualRow.index];
+                                    return (
+                                        <tr
+                                            key={virtualRow.key}
+                                            style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                width: '100%',
+                                                height: `${virtualRow.size}px`,
+                                                transform: `translateY(${virtualRow.start}px)`
+                                            }}
+                                            className="border-b border-slate-100 hover:bg-slate-50 flex items-center px-4"
+                                            onClick={() => handleOpenEdit(item)}
+                                        >
+                                            <td className="w-1/4 px-6 py-2">
+                                                <div className="space-y-0.5 truncate">
+                                                    <div className="font-bold text-slate-900 text-sm">
+                                                        <HighlightText text={item.makeEnDesc} highlight={debouncedSearch} />
+                                                    </div>
+                                                    <span className="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded leading-none">
+                                                        <HighlightText text={item.adpMakeId} highlight={debouncedSearch} />
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="w-1/4 px-6 py-2">
+                                                <div className="space-y-0.5 truncate">
+                                                    <div className="font-medium text-slate-700 text-sm">
+                                                        <HighlightText text={item.modelEnDesc} highlight={debouncedSearch} />
+                                                    </div>
+                                                    <span className="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded leading-none">
+                                                        <HighlightText text={item.adpModelId} highlight={debouncedSearch} />
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="w-1/4 px-6 py-2">
+                                                <div className="space-y-0.5 truncate">
+                                                    <div className="font-medium text-slate-700 text-sm">
+                                                        <HighlightText text={item.typeEnDesc} highlight={debouncedSearch} />
+                                                    </div>
+                                                    <span className="font-mono text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded leading-none">
+                                                        {item.adpTypeId}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td className="w-1/4 px-6 py-2 text-right">
+                                                <div className="flex justify-end gap-1">
+                                                    <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-indigo-50" onClick={(e) => handleOpenHistory(e, item.id)}>
+                                                        <Clock size={14} className="text-slate-400" />
+                                                    </Button>
+                                                    <Button variant="ghost" className="h-8 w-8 p-0 hover:bg-slate-100" onClick={(e) => { e.stopPropagation(); handleOpenEdit(item); }}>
+                                                        <Edit3 size={14} className="text-slate-400" />
+                                                    </Button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
             <Pagination 
@@ -254,11 +299,11 @@ export const ADPMasterView: React.FC = () => {
         </div>
       </Modal>
 
-      <Modal isOpen={isBulkOpen} onClose={handleCloseBulk} title="Bulk Master Upload (Upsert)" footer={
+      <Modal isOpen={isBulkOpen} onClose={() => setIsBulkOpen(false)} title="Bulk Master Upload (Upsert Logic)" footer={
           !uploadResult ? (
-             <><Button variant="secondary" onClick={handleCloseBulk}>Cancel</Button><Button onClick={handleBulk} isLoading={bulkImport.isPending}>Upload & Sync</Button></>
+             <><Button variant="secondary" onClick={() => setIsBulkOpen(false)}>Cancel</Button><Button onClick={handleBulk} isLoading={bulkImport.isPending}>Upload & Sync</Button></>
           ) : (
-             <Button onClick={handleCloseBulk}>Close</Button>
+             <Button onClick={() => setIsBulkOpen(false)}>Close</Button>
           )
       }>
          {!uploadResult ? (
@@ -271,27 +316,27 @@ export const ADPMasterView: React.FC = () => {
                  <div className="flex justify-between items-center p-3 bg-slate-50 border border-slate-200 rounded">
                      <div className="flex flex-col">
                         <span className="text-sm font-medium text-slate-700">Download Template</span>
-                        <span className="text-xs text-slate-500">Get the expected CSV format.</span>
+                        <span className="text-xs text-slate-500">Get the expected CSV format for bulk upsert.</span>
                      </div>
                      <Button variant="secondary" onClick={handleDownloadSample} className="h-8 text-xs gap-2">
-                        <Download size={14}/> Download .csv
+                        <Download size={14}/> Download Template
                      </Button>
                  </div>
                  
-                 <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl border-dashed flex flex-col items-center">
+                 <div className="p-8 bg-slate-50 border border-slate-200 rounded-xl border-dashed flex flex-col items-center">
                      <Upload size={32} className="text-slate-300 mb-2" />
-                     <p className="text-sm font-medium text-slate-700 mb-4 text-center">Drag and drop your ADP CSV here</p>
+                     <p className="text-sm font-medium text-slate-700 mb-4 text-center">Select or drag ADP CSV here</p>
                      <input type="file" accept=".csv" onChange={e => setBulkFile(e.target.files?.[0] || null)} className="text-xs" />
                  </div>
              </div>
          ) : (
              <div className="space-y-4">
-                <div className={`p-4 rounded-lg border ${uploadResult.recordsSkipped > 0 ? 'bg-amber-50 border-amber-100' : 'bg-emerald-50 border-emerald-100'}`}>
-                   <div className="flex items-center gap-2 mb-1">
-                       {uploadResult.recordsSkipped > 0 ? <AlertTriangle size={18} className="text-amber-600"/> : <CheckCircle2 size={18} className="text-emerald-600"/>}
+                <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-lg flex items-center gap-3">
+                   <CheckCircle2 size={18} className="text-emerald-600"/>
+                   <div>
                        <h3 className="font-bold text-slate-800">Sync Complete</h3>
+                       <p className="text-sm text-slate-600">The ADP master data has been synchronized.</p>
                    </div>
-                   <p className="text-sm text-slate-600">{uploadResult.message || "ADP Master data has been synchronized."}</p>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-4">
@@ -307,6 +352,8 @@ export const ADPMasterView: React.FC = () => {
              </div>
          )}
       </Modal>
+
+      <HistoryModal isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} adpId={selectedAdpId} />
     </div>
   );
 };

@@ -1,0 +1,26 @@
+
+# Backend Changes: AI Intelligence & Customization
+
+## 1. Database Schema Updates (`app_config` table)
+The following columns must be added to support the new portal settings:
+
+- `ai_provider`: ENUM('gemini', 'openai') DEFAULT 'gemini'. 
+- `system_instruction`: TEXT. To store the global system prompt used for AI interactions.
+- `ai_api_key`: TEXT (Encrypted). While the frontend uses ENV variables, the backend should support project-level key overrides stored in the DB (AES encrypted).
+
+## 2. API Endpoint: `GET /api/config/test-ai-connection`
+Implement a new diagnostic endpoint that:
+1.  Retrieves the active `ai_provider` and `system_instruction`.
+2.  Performs a "dry run" or a low-token request (e.g., "Respond with 'pong'").
+3.  **Gemini logic**: Use Google GenAI SDK to send a simple content generation request.
+4.  **OpenAI logic**: Call the `/v1/chat/completions` endpoint.
+5.  Returns `200 OK` with JSON `{ "status": "success", "latency": 123 }` or `500 Error` with descriptive failure details.
+
+## 3. Dynamic Prompt Injection Logic
+In the AI Matching and Description Generation services:
+- Before sending the prompt to Gemini/OpenAI, fetch the `system_instruction` from the cached `AppConfig`.
+- For Gemini: Set the `systemInstruction` field in the `generateContent` configuration.
+- For OpenAI: Inject a message with `role: "system"` as the first item in the message array.
+
+## 4. Audit Log Enrichment
+- Log every change to the `system_instruction` in the audit log, as a poorly configured prompt can significantly degrade mapping accuracy or increase API costs.

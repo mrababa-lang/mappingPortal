@@ -1,0 +1,44 @@
+
+# ADP Master List - Backend Specification
+
+## Overview
+The ADP Master List serves as the source of truth for all vehicle metadata originating from external ERP systems. The system must support granular single-record updates via form and large-scale bulk synchronization with upsert (merge) logic.
+
+## API Endpoints
+
+### 1. GET /api/adp/master
+- **Purpose**: Fetch paginated master records.
+- **Query Params**: `page`, `size`, `q` (search term).
+- **Search Logic**: Fuzzy match across `adpMakeId`, `makeEnDesc`, `adpModelId`, `modelEnDesc`.
+
+### 2. POST /api/adp/master
+- **Purpose**: Manual creation of a single master record.
+- **Payload**: JSON matching ADPMaster interface.
+- **Validation**: Ensure `adpMakeId` + `adpModelId` combination is unique to avoid logical duplicates.
+
+### 3. PUT /api/adp/master/{id}
+- **Purpose**: Update any field of an existing record.
+- **Logic**: Find record by ID and perform a partial or full update.
+- **Auditing**: Must trigger an entry in `ADPHistory` tracking the specific changes.
+
+### 4. POST /api/adp/master/bulk
+- **Purpose**: Large scale data synchronization.
+- **Logic**:
+    1. Iterate through JSON payload.
+    2. Check if a record with the same `adpMakeId` and `adpModelId` exists.
+    3. **IF EXISTS**: Update the existing record with the new English/Arabic descriptions and Type ID.
+    4. **IF NOT EXISTS**: Create a new record.
+- **Response**: Return a summary JSON: `{ "recordsAdded": N, "recordsSkipped": M, "message": "..." }`.
+
+## Database Schema Considerations
+- Table: `adp_master`
+- Indexes:
+    - Primary: `id` (UUID or Serial)
+    - Unique Constraint: `(adp_make_id, adp_model_id)`
+    - B-Tree Index: `adp_make_id` for quick manufacturer filtering.
+
+## Auditing Integration
+Every `PUT` or `POST` action on the ADP Master list must generate a row in the `adp_history` table:
+- `timestamp`: now()
+- `action`: "CREATED" | "UPDATED" | "SYNCED"
+- `details`: JSON string or text describing which fields changed.
