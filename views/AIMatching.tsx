@@ -174,19 +174,19 @@ export const AIMatchingView: React.FC = () => {
           <Card className="p-4 bg-indigo-50 border-indigo-100 flex items-center gap-4">
               <div className="p-2 bg-indigo-600 text-white rounded-lg"><BrainCircuit size={20}/></div>
               <div>
-                  <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest leading-none mb-1">Queue Size</p>
-                  <p className="text-xl font-bold text-indigo-900 leading-none">
+                  <div className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest leading-none mb-1">Queue Size</div>
+                  <div className="text-xl font-bold text-indigo-900 leading-none">
                     {isLoading ? <Skeleton className="h-5 w-8 inline-block" /> : (data?.totalElements || 0)}
-                  </p>
+                  </div>
               </div>
           </Card>
           <Card className="p-4 bg-emerald-50 border-emerald-100 flex items-center gap-4">
               <div className="p-2 bg-emerald-600 text-white rounded-lg"><TrendingUp size={20}/></div>
               <div>
-                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest leading-none mb-1">Identified</p>
-                  <p className="text-xl font-bold text-emerald-900 leading-none">
+                  <div className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest leading-none mb-1">Identified</div>
+                  <div className="text-xl font-bold text-emerald-900 leading-none">
                     {Object.keys(aiMatches).length}
-                  </p>
+                  </div>
               </div>
           </Card>
       </div>
