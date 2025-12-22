@@ -1,10 +1,10 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useADPMappings, useUpsertMapping } from '../hooks/useADPData';
 import { useMakes, useModels } from '../hooks/useVehicleData';
 import { useAppConfig } from '../hooks/useAdminData';
 import { Card, Button, TableHeader, TableHead, TableRow, TableCell, EmptyState, Pagination, Skeleton, HighlightText } from '../components/UI';
-import { Sparkles, Check, X, RefreshCw, BrainCircuit, AlertCircle, TrendingUp, ArrowRight, Search, History } from 'lucide-react';
+import { Sparkles, Check, X, RefreshCw, BrainCircuit, AlertCircle, TrendingUp, ArrowRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { suggestMapping } from '../services/geminiService';
 

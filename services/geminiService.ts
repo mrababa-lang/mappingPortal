@@ -9,11 +9,16 @@ const cleanJsonString = (str: string): string => {
   return str.replace(/```json\n?|```/g, '').trim();
 };
 
+/**
+ * Initializes the AI client. 
+ * Prioritizes the provided key (from backend config) over the environment variable.
+ */
 const getAIClient = (providedKey?: string) => {
   const key = providedKey || process.env.API_KEY;
   if (!key) {
-    throw new Error("Gemini API Key is missing. Please check system configuration.");
+    throw new Error("Gemini API Key is missing. Please ensure enableAI is true in System Configuration.");
   }
+  // Named parameter initialization as per guidelines
   return new GoogleGenAI({ apiKey: key });
 };
 
