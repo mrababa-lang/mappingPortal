@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useADPMappings, useUpsertMapping } from '../hooks/useADPData';
 import { useMakes, useModels } from '../hooks/useVehicleData';
+import { useAppConfig } from '../hooks/useAdminData';
 import { Card, Button, TableHeader, TableHead, TableRow, TableCell, EmptyState, Pagination, Skeleton, HighlightText } from '../components/UI';
 import { Sparkles, Check, X, RefreshCw, BrainCircuit, AlertCircle, TrendingUp, ArrowRight, Search, History } from 'lucide-react';
 import { toast } from 'sonner';
@@ -65,6 +66,7 @@ export const AIMatchingView: React.FC = () => {
   const { data: makesData } = useMakes({ size: 1000 });
   const makes = makesData?.content || [];
   const { data: models = [] } = useModels();
+  const { data: config } = useAppConfig();
   const upsertMapping = useUpsertMapping();
 
   const pendingItems = data?.content || [];
@@ -82,7 +84,7 @@ export const AIMatchingView: React.FC = () => {
             if (newMatches[adpId]) continue;
 
             const description = `${item.makeEnDesc} ${item.modelEnDesc} ${item.typeEnDesc || ''}`;
-            const result = await suggestMapping(description);
+            const result = await suggestMapping(description, config?.apiKey);
 
             if (result && result.make) {
                 const foundMake = makes.find(m => 
@@ -113,8 +115,8 @@ export const AIMatchingView: React.FC = () => {
         }
         setAiMatches(newMatches);
         toast.success("AI Analysis complete.");
-    } catch (e) {
-        toast.error("AI Batch Analysis failed.");
+    } catch (e: any) {
+        toast.error(e.message || "AI Batch Analysis failed.");
     } finally {
         setIsAnalyzing(false);
     }

@@ -52,7 +52,7 @@ export const ADPMappingView: React.FC = () => {
   const makes = makesData?.content || [];
   
   const { data: models = [] } = useModels();
-  const { data: config = { enableAI: false } } = useAppConfig();
+  const { data: config } = useAppConfig();
   
   const upsertMapping = useUpsertMapping();
 
@@ -104,7 +104,7 @@ export const ADPMappingView: React.FC = () => {
     setIsAiLoading(true);
     try {
         const description = `${selectedItem.makeEnDesc} ${selectedItem.modelEnDesc} ${selectedItem.typeEnDesc || ''}`;
-        const result = await suggestMapping(description);
+        const result = await suggestMapping(description, config?.apiKey);
         if (result && result.make) {
             const foundMake = makes.find(m => 
               m.name.toLowerCase().includes(result.make.toLowerCase()) || 

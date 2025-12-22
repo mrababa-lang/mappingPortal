@@ -107,6 +107,7 @@ export interface User {
 
 export interface AppConfig {
   enableAI: boolean;
+  apiKey?: string; // Dynamic key from backend
   aiProvider: 'gemini' | 'openai';
   geminiApiKey?: string;
   openaiApiKey?: string;

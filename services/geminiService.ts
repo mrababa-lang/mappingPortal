@@ -9,9 +9,17 @@ const cleanJsonString = (str: string): string => {
   return str.replace(/```json\n?|```/g, '').trim();
 };
 
-export const generateDescription = async (itemName: string, context: string, systemInstruction?: string): Promise<string> => {
+const getAIClient = (providedKey?: string) => {
+  const key = providedKey || process.env.API_KEY;
+  if (!key) {
+    throw new Error("Gemini API Key is missing. Please check system configuration.");
+  }
+  return new GoogleGenAI({ apiKey: key });
+};
+
+export const generateDescription = async (itemName: string, context: string, apiKey?: string, systemInstruction?: string): Promise<string> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = getAIClient(apiKey);
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: `Generate a concise and professional description for a vehicle item named "${itemName}". Context: ${context}.`,
@@ -20,16 +28,16 @@ export const generateDescription = async (itemName: string, context: string, sys
       }
     });
     return response.text || "";
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI Generation Error:", error);
-    toast.error("Failed to generate description via AI");
+    toast.error(error.message || "Failed to generate description via AI");
     return "";
   }
 };
 
-export const suggestModels = async (makeName: string, systemInstruction?: string): Promise<string[]> => {
+export const suggestModels = async (makeName: string, apiKey?: string, systemInstruction?: string): Promise<string[]> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = getAIClient(apiKey);
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: `List 5 popular car models for the manufacturer "${makeName}".`,
@@ -60,9 +68,9 @@ export const suggestModels = async (makeName: string, systemInstruction?: string
   }
 };
 
-export const suggestMapping = async (adpDescription: string, systemInstruction?: string): Promise<{ make: string, model: string } | null> => {
+export const suggestMapping = async (adpDescription: string, apiKey?: string, systemInstruction?: string): Promise<{ make: string, model: string } | null> => {
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = getAIClient(apiKey);
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: `Extract the vehicle Manufacturer (make) and Model from this raw description: "${adpDescription}". If you cannot find them, return empty strings.`,
@@ -84,9 +92,8 @@ export const suggestMapping = async (adpDescription: string, systemInstruction?:
     if (!text) return null;
     const cleanedText = cleanJsonString(text);
     return JSON.parse(cleanedText);
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI Mapping Error:", error);
-    // Note: If you see "An API Key must be set", ensure your environment's API_KEY is valid.
     return null;
   }
 };
